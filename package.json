@@ -1,0 +1,36 @@
+{
+  "name": "ContestSaas",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@internationalized/date": "^3.12.0",
+    "@nuxtjs/color-mode": "^4.0.0",
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "@pinia/nuxt": "^0.11.3",
+    "@supabase/supabase-js": "^2.101.1",
+    "@tanstack/vue-table": "^8.21.3",
+    "@vueuse/core": "^14.2.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "embla-carousel-vue": "^8.6.0",
+    "lucide-vue-next": "^1.0.0",
+    "nuxt": "^4.4.2",
+    "pinia": "^3.0.4",
+    "reka-ui": "^2.9.4",
+    "shadcn-nuxt": "^2.4.3",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^3.4.19",
+    "tailwindcss-animate": "^1.0.7",
+    "vaul-vue": "^0.4.1",
+    "vue": "^3.5.31",
+    "vue-router": "^5.0.4",
+    "vue-sonner": "^2.0.9"
+  }
+}
