@@ -26,7 +26,6 @@ import { useContestStore } from '~/stores/contest'
 import { storeToRefs } from 'pinia'
 import { toast } from 'vue-sonner'
 
-definePageMeta({ middleware: 'auth' })
 
 const contestStore = useContestStore()
 const { judgePool } = storeToRefs(contestStore)

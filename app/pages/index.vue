@@ -1,14 +1,21 @@
+<script setup lang="ts">
+// The global auth middleware handles redirects based on auth state.
+// This page just provides a loading fallback during the initial check.
+definePageMeta({ middleware: [] })
+
+const authStore = useAuthStore()
+
+onMounted(async () => {
+  if (authStore.isAuthenticated) {
+    await navigateTo('/dashboard')
+  } else {
+    await navigateTo('/auth/login')
+  }
+})
+</script>
+
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-gray-50">
-    <div class="text-center font-bold text-xl text-gray-500">
-      Cargando aplicación...
-    </div>
+  <div class="flex min-h-screen items-center justify-center bg-background">
+    <div class="text-center text-sm text-muted-foreground">Cargando…</div>
   </div>
 </template>
-
-<script setup>
-import { navigateTo } from '#imports'
-
-// Redirige automáticamente al dashboard al entrar
-navigateTo('/dashboard')
-</script>

@@ -6,6 +6,19 @@ export type Json =
   | { [key: string]: any }
   | any[]
 
+// ─── Auth / Profile ──────────────────────────────────────────────────────────
+
+export type AccountType = 'org_owner' | 'user'
+
+export type Profile = {
+  id: string
+  full_name: string | null
+  avatar_url: string | null
+  account_type: AccountType
+  created_at: string
+  updated_at: string
+}
+
 export interface Database {
   public: {
     Tables: {

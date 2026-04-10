@@ -16,16 +16,25 @@ import {
   SidebarTrigger,
   SidebarInset
 } from '@/components/ui/sidebar'
-import { useRoute } from 'vue-router'
-
-// Usando iconos genéricos temporalmente o Lucide
+import { useRoute, useRouter } from 'vue-router'
 import { LayoutDashboard, Trophy, Settings, LogOut, Sun, Moon, Users } from 'lucide-vue-next'
+import Profile from '@/components/user/profile.vue'
+import NotificationsPopover from '@/components/ui/notifications/NotificationsPopover.vue'
 
 const route = useRoute()
+const router = useRouter()
 const colorMode = useColorMode()
+const authStore = useAuthStore()
+
+const { displayName, initials, organization, isOrgOwner, profile } = storeToRefs(authStore)
 
 function toggleColorMode() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
+}
+
+async function handleSignOut() {
+  await authStore.signOut()
+  router.push('/auth/login')
 }
 </script>
 
@@ -34,10 +43,14 @@ function toggleColorMode() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div class="px-2 py-4 flex items-center gap-3">
-          <div class="w-10 h-10 rounded-lg bg-black flex items-center justify-center font-bold text-white shadow-lg shadow-zinc-900/20 text-lg">
+          <div class="w-10 h-10 rounded-lg bg-black flex items-center justify-center font-bold text-white shadow-lg shadow-zinc-900/20 text-lg shrink-0">
             C
           </div>
-          <h1 class="text-2xl font-extrabold tracking-tight group-data-[collapsible=icon]:hidden">Contest<span class="text-zinc-500">SaaS</span></h1>
+          <div class="group-data-[collapsible=icon]:hidden min-w-0">
+            <h1 class="text-lg font-extrabold tracking-tight leading-tight truncate">
+              Contest<span class="text-zinc-500">SaaS</span>
+            </h1>
+          </div>
         </div>
       </SidebarHeader>
 
@@ -52,24 +65,39 @@ function toggleColorMode() {
                 </NuxtLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :isActive="route.path === '/contests'" tooltip="Mis Concursos">
-                <NuxtLink to="/contests">
-                  <Trophy />
-                  <span>Mis Concursos</span>
-                </NuxtLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
 
-            <SidebarMenuItem>
-              <SidebarMenuButton as-child :isActive="route.path === '/judge-pool'" tooltip="Jurados">
-                <NuxtLink to="/judge-pool">
-                  <Users />
-                  <span>Jurados</span>
-                </NuxtLink>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <!-- Org-only navigation -->
+            <template v-if="isOrgOwner">
+              <SidebarMenuItem>
+                <SidebarMenuButton as-child :isActive="route.path.startsWith('/contests')" tooltip="Mis Concursos">
+                  <NuxtLink to="/contests">
+                    <Trophy />
+                    <span>Mis Concursos</span>
+                  </NuxtLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton as-child :isActive="route.path === '/judge-pool'" tooltip="Jurados">
+                  <NuxtLink to="/judge-pool">
+                    <Users />
+                    <span>Jurados</span>
+                  </NuxtLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </template>
+
+            <!-- Regular user navigation -->
+            <template v-else-if="profile">
+              <SidebarMenuItem>
+                <SidebarMenuButton as-child :isActive="route.path === '/my-contests'" tooltip="Mis Concursos">
+                  <NuxtLink to="/my-contests">
+                    <Trophy />
+                    <span>Mis Concursos</span>
+                  </NuxtLink>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </template>
 
             <SidebarMenuItem>
               <SidebarMenuButton as-child tooltip="Configuración">
@@ -85,13 +113,9 @@ function toggleColorMode() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <!-- Profile -->
           <SidebarMenuItem>
-            <SidebarMenuButton as-child tooltip="Cerrar Sesión">
-              <button class="w-full flex items-center gap-2">
-                <LogOut />
-                <span>Cerrar Sesión</span>
-              </button>
-            </SidebarMenuButton>
+            <Profile/>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
@@ -102,13 +126,14 @@ function toggleColorMode() {
         <div class="flex items-center gap-2">
           <SidebarTrigger class="-ml-1" />
         </div>
-        
+
         <div class="flex items-center justify-end gap-4 flex-1">
           <div class="w-full max-w-sm hidden md:flex">
-             <Input placeholder="Buscar competencias, participantes..." class="bg-muted/50 border-border focus-visible:ring-zinc-900 h-9" />
+            <Input placeholder="Buscar competencias, participantes..." class="bg-muted/50 border-border focus-visible:ring-zinc-900 h-9" />
           </div>
-          
+
           <ClientOnly>
+            <NotificationsPopover />
             <Button variant="ghost" size="icon" @click="toggleColorMode" class="rounded-full w-9 h-9">
               <Sun v-if="colorMode.value === 'dark'" class="w-5 h-5" />
               <Moon v-else class="w-5 h-5" />
@@ -118,18 +143,14 @@ function toggleColorMode() {
               <div class="w-9 h-9" />
             </template>
           </ClientOnly>
-
-          <Avatar class="w-9 h-9 border border-border shadow-sm">
-            <AvatarImage src="https://i.pravatar.cc/150?img=11" alt="Usuario" />
-            <AvatarFallback>OM</AvatarFallback>
-          </Avatar>
         </div>
       </header>
-      
+
       <div class="flex-1 overflow-auto p-8 relative">
         <slot />
       </div>
     </SidebarInset>
+
     <Toaster position="top-center" theme="system" />
   </SidebarProvider>
 </template>
