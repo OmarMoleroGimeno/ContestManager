@@ -354,6 +354,16 @@ const currentParticipantDetails = computed(() => {
 })
 
 // ── Participant detail modal: editable scores per judge ──────────────────────
+const participantDetailFilter = ref('')
+const filteredParticipantJudgeDetails = computed(() => {
+  const details = currentParticipantDetails.value?.judge_details ?? []
+  if (!participantDetailFilter.value.trim()) return details
+  const q = participantDetailFilter.value.toLowerCase()
+  return details.filter((s: any) => {
+    const judge = currentRoundSummary.value?.judges?.find((j: any) => j.user_id === s.judge_id) as any
+    return (judge?.name || '').toLowerCase().includes(q)
+  })
+})
 const editingJudgeId = ref<string|null>(null)
 const editDraft = ref<{ value: number; notes: string; promote: boolean }>({ value: 0, notes: '', promote: false })
 const isSavingScore = ref(false)
@@ -390,6 +400,19 @@ const saveEditedScore = async (judgeId: string) => {
 }
 
 // ── Judge detail modal: all scores + pending participants ─────────────────────
+const judgeDetailFilter = ref('')
+const filteredJudgeScoredParticipants = computed(() => {
+  const items = currentJudgeDetails.value?.scored ?? []
+  if (!judgeDetailFilter.value.trim()) return items
+  const q = judgeDetailFilter.value.toLowerCase()
+  return items.filter((item: any) => item.participant?.name?.toLowerCase().includes(q))
+})
+const filteredJudgePendingParticipants = computed(() => {
+  const items = currentJudgeDetails.value?.pending ?? []
+  if (!judgeDetailFilter.value.trim()) return items
+  const q = judgeDetailFilter.value.toLowerCase()
+  return items.filter((item: any) => item.participant?.name?.toLowerCase().includes(q))
+})
 const isJudgeDetailOpen = ref(false)
 const selectedJudgeUserId = ref<string|null>(null)
 const editingParticipantId = ref<string|null>(null)
@@ -955,9 +978,11 @@ const contestSettings = computed(() => {
     </div>
 
     <!-- GLOBAL DIALOGS -->
-    <Dialog v-model:open="isParticipantDetailOpen" @update:open="(v) => { if (!v) cancelEditing() }">
-      <DialogContent class="max-w-2xl rounded-2xl overflow-hidden p-0 border border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-950">
-        <!-- Header: clean card style matching the rest of the app -->
+
+    <!-- Participant detail dialog: scores per judge, editable table -->
+    <Dialog v-model:open="isParticipantDetailOpen" @update:open="(v) => { if (!v) { cancelEditing(); participantDetailFilter = '' } }">
+      <DialogContent class="max-w-3xl rounded-2xl overflow-hidden p-0 border border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-950">
+        <!-- Header -->
         <div class="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center gap-4">
           <div class="w-11 h-11 rounded-xl bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center shadow-sm shrink-0">
             <Users class="w-5 h-5 text-white dark:text-zinc-900" />
@@ -976,123 +1001,122 @@ const contestSettings = computed(() => {
           </div>
         </div>
 
-        <!-- Editable table -->
-        <div class="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
-          <div
-            v-for="s in currentParticipantDetails?.judge_details"
-            :key="s.judge_id"
-            class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900/30 overflow-hidden"
-          >
-            <!-- Judge row header -->
-            <div class="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-              <div class="flex items-center gap-2">
-                <Avatar class="w-7 h-7">
-                  <AvatarFallback class="text-[10px] font-bold bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
-                    {{ ((currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'J').charAt(0).toUpperCase() }}
-                  </AvatarFallback>
-                </Avatar>
-                <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-                  {{ (currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'Jurado' }}
-                </span>
-              </div>
-              <!-- Edit / Save / Cancel buttons -->
-              <div v-if="editingJudgeId === s.judge_id" class="flex gap-1.5">
-                <Button size="sm" variant="ghost" class="h-7 px-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" @click="cancelEditing">
-                  <X class="w-3.5 h-3.5 mr-1" /> Cancelar
-                </Button>
-                <Button size="sm" class="h-7 px-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300" :disabled="isSavingScore" @click="saveEditedScore(s.judge_id)">
-                  <Save class="w-3.5 h-3.5 mr-1" /> {{ isSavingScore ? 'Guardando…' : 'Guardar' }}
-                </Button>
-              </div>
-              <Button v-else size="sm" variant="ghost" class="h-7 px-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300" @click="startEditing(s)">
-                <Pencil class="w-3.5 h-3.5 mr-1" /> Editar
-              </Button>
-            </div>
-
-            <!-- Row body: view mode -->
-            <div v-if="editingJudgeId !== s.judge_id" class="grid grid-cols-3 gap-4 px-4 py-3 text-sm">
-              <div>
-                <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Nota</p>
-                <Badge variant="secondary" class="font-black rounded-md px-3 py-1 text-base border-2 shadow-sm" :class="getStatusClasses('active')">
-                  {{ Number(s.value).toFixed(1) }}
-                </Badge>
-              </div>
-              <div>
-                <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Promociona</p>
-                <Badge v-if="s.promote" class="bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700 font-bold border-2 text-[10px] uppercase tracking-wide">
-                  Sí
-                </Badge>
-                <span v-else class="text-zinc-300 dark:text-zinc-600 text-xs font-medium">No</span>
-              </div>
-              <div>
-                <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Observaciones</p>
-                <p class="text-[12px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
-                  {{ s.notes || 'Sin observaciones.' }}
-                </p>
-              </div>
-            </div>
-
-            <!-- Row body: edit mode -->
-            <div v-else class="px-4 py-4 space-y-4">
-              <div class="grid grid-cols-2 gap-4">
-                <!-- Score input -->
-                <div class="space-y-1.5">
-                  <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nota</Label>
-                  <Input
-                    v-model.number="editDraft.value"
-                    type="number"
-                    min="0"
-                    :max="currentRound?.max_score ?? 10"
-                    step="0.1"
-                    class="text-center font-black text-xl h-12 border-2 border-zinc-200 dark:border-zinc-700 focus:border-zinc-900 dark:focus:border-zinc-100 rounded-xl"
-                  />
-                </div>
-                <!-- Promote toggle -->
-                <div class="space-y-1.5">
-                  <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Promocionar</Label>
-                  <div
-                    class="h-12 rounded-xl border-2 flex items-center justify-between px-4 cursor-pointer transition-all select-none"
-                    :class="editDraft.promote
-                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-600'
-                      : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/30'"
-                    @click="editDraft.promote = !editDraft.promote"
-                  >
-                    <span class="text-sm font-semibold" :class="editDraft.promote ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-400'">
-                      {{ editDraft.promote ? 'Sí, promocionar' : 'No promocionar' }}
-                    </span>
-                    <div
-                      class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all"
-                      :class="editDraft.promote ? 'bg-blue-500 border-blue-500' : 'border-zinc-300 dark:border-zinc-600'"
-                    >
-                      <Check v-if="editDraft.promote" class="w-3 h-3 text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- Notes -->
-              <div class="space-y-1.5">
-                <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Observaciones</Label>
-                <Textarea
-                  v-model="editDraft.notes"
-                  placeholder="Añade observaciones sobre este participante…"
-                  rows="3"
-                  class="resize-none border-2 border-zinc-200 dark:border-zinc-700 focus:border-zinc-900 dark:focus:border-zinc-100 rounded-xl text-sm"
-                />
-              </div>
-            </div>
+        <!-- Filter -->
+        <div class="px-6 pt-4 pb-0">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+            <Input v-model="participantDetailFilter" placeholder="Filtrar por jurado…" class="pl-8 h-8 text-sm border-zinc-200 dark:border-zinc-700 rounded-lg" />
           </div>
+        </div>
 
-          <!-- Empty state -->
-          <div v-if="!currentParticipantDetails?.judge_details?.length" class="text-center py-10 text-zinc-400">
-            <ClipboardCheck class="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p class="text-sm font-medium">Ningún jurado ha puntuado aún</p>
+        <!-- Table -->
+        <div class="p-6 pt-3 max-h-[60vh] overflow-y-auto">
+          <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+            <Table>
+              <TableHeader class="bg-zinc-50 dark:bg-zinc-900/50">
+                <TableRow class="border-zinc-100 dark:border-zinc-800 hover:bg-transparent">
+                  <TableHead class="pl-5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Jurado</TableHead>
+                  <TableHead class="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-400 w-20">Nota</TableHead>
+                  <TableHead class="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-400 w-24">Promociona</TableHead>
+                  <TableHead class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Observaciones</TableHead>
+                  <TableHead class="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <template v-for="s in filteredParticipantJudgeDetails" :key="s.judge_id">
+                  <!-- View row -->
+                  <TableRow v-if="editingJudgeId !== s.judge_id" class="border-zinc-50 dark:border-zinc-900 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors last:border-0">
+                    <TableCell class="pl-5 py-3">
+                      <div class="flex items-center gap-2">
+                        <Avatar class="w-6 h-6 shrink-0">
+                          <AvatarFallback class="text-[9px] font-bold bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
+                            {{ ((currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'J').charAt(0).toUpperCase() }}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[140px]">
+                          {{ (currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'Jurado' }}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-center py-3">
+                      <Badge variant="secondary" class="font-black rounded-md px-2.5 py-0.5 text-sm border-2" :class="getStatusClasses('active')">
+                        {{ Number(s.value).toFixed(1) }}
+                      </Badge>
+                    </TableCell>
+                    <TableCell class="text-center py-3">
+                      <Badge v-if="s.promote" class="bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700 font-bold border text-[10px] uppercase tracking-wide">Sí</Badge>
+                      <span v-else class="text-zinc-300 dark:text-zinc-600 text-xs">—</span>
+                    </TableCell>
+                    <TableCell class="py-3 max-w-[200px]">
+                      <span class="text-[12px] text-zinc-400 italic truncate block">{{ s.notes || '—' }}</span>
+                    </TableCell>
+                    <TableCell class="py-3 pr-3 text-right">
+                      <Button size="icon" variant="ghost" class="h-7 w-7 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300" @click="startEditing(s)">
+                        <Pencil class="w-3.5 h-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  <!-- Edit row -->
+                  <TableRow v-else class="border-zinc-50 dark:border-zinc-900 bg-zinc-50/80 dark:bg-zinc-900/40">
+                    <TableCell class="pl-5 py-3">
+                      <div class="flex items-center gap-2">
+                        <Avatar class="w-6 h-6 shrink-0">
+                          <AvatarFallback class="text-[9px] font-bold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900">
+                            {{ ((currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'J').charAt(0).toUpperCase() }}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span class="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[140px]">
+                          {{ (currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'Jurado' }}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell class="text-center py-2">
+                      <Input v-model.number="editDraft.value" type="number" min="0" :max="currentRound?.max_score ?? 10" step="0.1"
+                        class="w-16 text-center font-black text-sm h-8 border-2 border-zinc-300 dark:border-zinc-600 rounded-lg mx-auto" />
+                    </TableCell>
+                    <TableCell class="text-center py-2">
+                      <div
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 cursor-pointer select-none transition-all text-[11px] font-bold uppercase tracking-wide"
+                        :class="editDraft.promote ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-400'"
+                        @click="editDraft.promote = !editDraft.promote"
+                      >
+                        <div class="w-3.5 h-3.5 rounded border flex items-center justify-center" :class="editDraft.promote ? 'bg-blue-500 border-blue-500' : 'border-zinc-300 dark:border-zinc-600'">
+                          <Check v-if="editDraft.promote" class="w-2.5 h-2.5 text-white" />
+                        </div>
+                        {{ editDraft.promote ? 'Sí' : 'No' }}
+                      </div>
+                    </TableCell>
+                    <TableCell class="py-2">
+                      <Input v-model="editDraft.notes" placeholder="Observaciones…" class="h-8 text-sm border-2 border-zinc-300 dark:border-zinc-600 rounded-lg" />
+                    </TableCell>
+                    <TableCell class="py-2 pr-3">
+                      <div class="flex items-center gap-1 justify-end">
+                        <Button size="icon" variant="ghost" class="h-7 w-7 text-zinc-400 hover:text-zinc-700" @click="cancelEditing">
+                          <X class="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="icon" class="h-7 w-7 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300" :disabled="isSavingScore" @click="saveEditedScore(s.judge_id)">
+                          <Save class="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </template>
+                <!-- Empty state -->
+                <TableRow v-if="!filteredParticipantJudgeDetails.length">
+                  <TableCell colspan="5" class="text-center py-10 text-zinc-400">
+                    <ClipboardCheck class="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    <p class="text-sm font-medium">{{ participantDetailFilter ? 'Sin resultados para ese filtro' : 'Ningún jurado ha puntuado aún' }}</p>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         </div>
       </DialogContent>
     </Dialog>
 
-    <!-- Judge detail dialog -->
-    <Dialog v-model:open="isJudgeDetailOpen" @update:open="(v) => { if (!v) cancelEditingParticipant() }">
+    <!-- Judge detail dialog: all scores + pending, editable table -->
+    <Dialog v-model:open="isJudgeDetailOpen" @update:open="(v) => { if (!v) { cancelEditingParticipant(); judgeDetailFilter = '' } }">
       <DialogContent class="max-w-3xl rounded-2xl overflow-hidden p-0 border border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-950">
         <!-- Header -->
         <div class="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center gap-4">
@@ -1119,115 +1143,133 @@ const contestSettings = computed(() => {
           </div>
         </div>
 
-        <div class="max-h-[65vh] overflow-y-auto">
-          <!-- Scored participants table -->
-          <div v-if="currentJudgeDetails?.scored.length" class="p-6 space-y-3">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 pb-1">Participantes calificados</p>
-            <div
-              v-for="item in currentJudgeDetails.scored"
-              :key="item.participant.id"
-              class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900/30 overflow-hidden"
-            >
-              <!-- Participant row header -->
-              <div class="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
-                <div class="flex items-center gap-2.5">
-                  <div class="w-7 h-7 rounded-lg bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-black text-zinc-600 dark:text-zinc-400">
-                    {{ item.participant?.name?.substring(0,2).toUpperCase() }}
-                  </div>
-                  <span class="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase">{{ item.participant?.name }}</span>
-                </div>
-                <div v-if="editingParticipantId === item.participant.id" class="flex gap-1.5">
-                  <Button size="sm" variant="ghost" class="h-7 px-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" @click="cancelEditingParticipant">
-                    <X class="w-3.5 h-3.5 mr-1" /> Cancelar
-                  </Button>
-                  <Button size="sm" class="h-7 px-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300" :disabled="isSavingJudgeScore" @click="saveJudgeScore(item.participant.id)">
-                    <Save class="w-3.5 h-3.5 mr-1" /> {{ isSavingJudgeScore ? 'Guardando…' : 'Guardar' }}
-                  </Button>
-                </div>
-                <Button v-else size="sm" variant="ghost" class="h-7 px-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300" @click="startEditingParticipant(item)">
-                  <Pencil class="w-3.5 h-3.5 mr-1" /> Editar
-                </Button>
-              </div>
+        <!-- Filter -->
+        <div class="px-6 pt-4 pb-0">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+            <Input v-model="judgeDetailFilter" placeholder="Filtrar por participante…" class="pl-8 h-8 text-sm border-zinc-200 dark:border-zinc-700 rounded-lg" />
+          </div>
+        </div>
 
-              <!-- View mode -->
-              <div v-if="editingParticipantId !== item.participant.id" class="grid grid-cols-3 gap-4 px-4 py-3 text-sm">
-                <div>
-                  <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Nota</p>
-                  <Badge variant="secondary" class="font-black rounded-md px-3 py-1 text-base border-2 shadow-sm" :class="getStatusClasses('active')">
-                    {{ Number(item.score.value).toFixed(1) }}
-                  </Badge>
-                </div>
-                <div>
-                  <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Promociona</p>
-                  <Badge v-if="item.score.promote" class="bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700 font-bold border-2 text-[10px] uppercase tracking-wide">Sí</Badge>
-                  <span v-else class="text-zinc-300 dark:text-zinc-600 text-xs font-medium">No</span>
-                </div>
-                <div>
-                  <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Observaciones</p>
-                  <p class="text-[12px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">{{ item.score.notes || 'Sin observaciones.' }}</p>
-                </div>
-              </div>
+        <div class="p-6 pt-3 max-h-[65vh] overflow-y-auto space-y-4">
+          <!-- Scored table -->
+          <div v-if="filteredJudgeScoredParticipants.length">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-2">Calificados</p>
+            <div class="rounded-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden">
+              <Table>
+                <TableHeader class="bg-zinc-50 dark:bg-zinc-900/50">
+                  <TableRow class="border-zinc-100 dark:border-zinc-800 hover:bg-transparent">
+                    <TableHead class="pl-5 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Participante</TableHead>
+                    <TableHead class="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-400 w-20">Nota</TableHead>
+                    <TableHead class="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-400 w-24">Promociona</TableHead>
+                    <TableHead class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Observaciones</TableHead>
+                    <TableHead class="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <template v-for="item in filteredJudgeScoredParticipants" :key="item.participant.id">
+                    <!-- View row -->
+                    <TableRow v-if="editingParticipantId !== item.participant.id" class="border-zinc-50 dark:border-zinc-900 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-colors last:border-0">
+                      <TableCell class="pl-5 py-3">
+                        <div class="flex items-center gap-2">
+                          <div class="w-6 h-6 rounded-md bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-black text-zinc-600 dark:text-zinc-400 shrink-0">
+                            {{ item.participant?.name?.substring(0,2).toUpperCase() }}
+                          </div>
+                          <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[140px] uppercase">{{ item.participant?.name }}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell class="text-center py-3">
+                        <Badge variant="secondary" class="font-black rounded-md px-2.5 py-0.5 text-sm border-2" :class="getStatusClasses('active')">
+                          {{ Number(item.score.value).toFixed(1) }}
+                        </Badge>
+                      </TableCell>
+                      <TableCell class="text-center py-3">
+                        <Badge v-if="item.score.promote" class="bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700 font-bold border text-[10px] uppercase tracking-wide">Sí</Badge>
+                        <span v-else class="text-zinc-300 dark:text-zinc-600 text-xs">—</span>
+                      </TableCell>
+                      <TableCell class="py-3 max-w-[200px]">
+                        <span class="text-[12px] text-zinc-400 italic truncate block">{{ item.score.notes || '—' }}</span>
+                      </TableCell>
+                      <TableCell class="py-3 pr-3 text-right">
+                        <Button size="icon" variant="ghost" class="h-7 w-7 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300" @click="startEditingParticipant(item)">
+                          <Pencil class="w-3.5 h-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                    <!-- Edit row -->
+                    <TableRow v-else class="border-zinc-50 dark:border-zinc-900 bg-zinc-50/80 dark:bg-zinc-900/40">
+                      <TableCell class="pl-5 py-3">
+                        <div class="flex items-center gap-2">
+                          <div class="w-6 h-6 rounded-md bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center text-[9px] font-black text-white dark:text-zinc-900 shrink-0">
+                            {{ item.participant?.name?.substring(0,2).toUpperCase() }}
+                          </div>
+                          <span class="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[140px] uppercase">{{ item.participant?.name }}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell class="text-center py-2">
+                        <Input v-model.number="judgeEditDraft.value" type="number" min="0" :max="currentRound?.max_score ?? 10" step="0.1"
+                          class="w-16 text-center font-black text-sm h-8 border-2 border-zinc-300 dark:border-zinc-600 rounded-lg mx-auto" />
+                      </TableCell>
+                      <TableCell class="text-center py-2">
+                        <div
+                          class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 cursor-pointer select-none transition-all text-[11px] font-bold uppercase tracking-wide"
+                          :class="judgeEditDraft.promote ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300' : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-400'"
+                          @click="judgeEditDraft.promote = !judgeEditDraft.promote"
+                        >
+                          <div class="w-3.5 h-3.5 rounded border flex items-center justify-center" :class="judgeEditDraft.promote ? 'bg-blue-500 border-blue-500' : 'border-zinc-300 dark:border-zinc-600'">
+                            <Check v-if="judgeEditDraft.promote" class="w-2.5 h-2.5 text-white" />
+                          </div>
+                          {{ judgeEditDraft.promote ? 'Sí' : 'No' }}
+                        </div>
+                      </TableCell>
+                      <TableCell class="py-2">
+                        <Input v-model="judgeEditDraft.notes" placeholder="Observaciones…" class="h-8 text-sm border-2 border-zinc-300 dark:border-zinc-600 rounded-lg" />
+                      </TableCell>
+                      <TableCell class="py-2 pr-3">
+                        <div class="flex items-center gap-1 justify-end">
+                          <Button size="icon" variant="ghost" class="h-7 w-7 text-zinc-400 hover:text-zinc-700" @click="cancelEditingParticipant">
+                            <X class="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="icon" class="h-7 w-7 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300" :disabled="isSavingJudgeScore" @click="saveJudgeScore(item.participant.id)">
+                            <Save class="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  </template>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
 
-              <!-- Edit mode -->
-              <div v-else class="px-4 py-4 space-y-4">
-                <div class="grid grid-cols-2 gap-4">
-                  <div class="space-y-1.5">
-                    <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nota</Label>
-                    <Input
-                      v-model.number="judgeEditDraft.value"
-                      type="number" min="0" :max="currentRound?.max_score ?? 10" step="0.1"
-                      class="text-center font-black text-xl h-12 border-2 border-zinc-200 dark:border-zinc-700 focus:border-zinc-900 dark:focus:border-zinc-100 rounded-xl"
-                    />
-                  </div>
-                  <div class="space-y-1.5">
-                    <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Promocionar</Label>
-                    <div
-                      class="h-12 rounded-xl border-2 flex items-center justify-between px-4 cursor-pointer transition-all select-none"
-                      :class="judgeEditDraft.promote ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-600' : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/30'"
-                      @click="judgeEditDraft.promote = !judgeEditDraft.promote"
-                    >
-                      <span class="text-sm font-semibold" :class="judgeEditDraft.promote ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-400'">
-                        {{ judgeEditDraft.promote ? 'Sí, promocionar' : 'No promocionar' }}
-                      </span>
-                      <div class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all" :class="judgeEditDraft.promote ? 'bg-blue-500 border-blue-500' : 'border-zinc-300 dark:border-zinc-600'">
-                        <Check v-if="judgeEditDraft.promote" class="w-3 h-3 text-white" />
+          <!-- Pending table -->
+          <div v-if="filteredJudgePendingParticipants.length">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-2">Pendientes de calificar</p>
+            <div class="rounded-xl border border-amber-100 dark:border-amber-900/30 overflow-hidden">
+              <Table>
+                <TableBody>
+                  <TableRow v-for="item in filteredJudgePendingParticipants" :key="item.participant.id" class="border-amber-50 dark:border-amber-900/10 hover:bg-amber-50/50 dark:hover:bg-amber-950/10 transition-colors last:border-0">
+                    <TableCell class="pl-5 py-3">
+                      <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-md bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-[9px] font-black text-amber-600 dark:text-amber-400 shrink-0">
+                          {{ item.participant?.name?.substring(0,2).toUpperCase() }}
+                        </div>
+                        <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 uppercase">{{ item.participant?.name }}</span>
                       </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="space-y-1.5">
-                  <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Observaciones</Label>
-                  <Textarea
-                    v-model="judgeEditDraft.notes"
-                    placeholder="Añade observaciones sobre este participante…"
-                    rows="3"
-                    class="resize-none border-2 border-zinc-200 dark:border-zinc-700 focus:border-zinc-900 dark:focus:border-zinc-100 rounded-xl text-sm"
-                  />
-                </div>
-              </div>
+                    </TableCell>
+                    <TableCell class="text-right pr-5 py-3">
+                      <span class="text-[10px] font-bold text-amber-500 uppercase tracking-widest">Sin calificar</span>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
           </div>
 
-          <!-- Pending participants -->
-          <div v-if="currentJudgeDetails?.pending.length" class="px-6 pb-6 space-y-2" :class="currentJudgeDetails?.scored.length ? 'pt-0' : 'pt-6'">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-amber-500 pb-1">Pendientes de calificar</p>
-            <div
-              v-for="item in currentJudgeDetails.pending"
-              :key="item.participant.id"
-              class="flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/50 dark:bg-amber-950/10"
-            >
-              <div class="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-[9px] font-black text-amber-600 dark:text-amber-400">
-                {{ item.participant?.name?.substring(0,2).toUpperCase() }}
-              </div>
-              <span class="text-sm font-semibold text-zinc-700 dark:text-zinc-300 uppercase">{{ item.participant?.name }}</span>
-              <span class="ml-auto text-[10px] font-bold text-amber-500 uppercase tracking-widest">Sin calificar</span>
-            </div>
-          </div>
-
-          <!-- Empty state: judge hasn't scored anything yet -->
-          <div v-if="!currentJudgeDetails?.scored.length && !currentJudgeDetails?.pending.length" class="text-center py-12 text-zinc-400">
+          <!-- Empty state -->
+          <div v-if="!filteredJudgeScoredParticipants.length && !filteredJudgePendingParticipants.length" class="text-center py-12 text-zinc-400">
             <ClipboardCheck class="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p class="text-sm font-medium">No hay participantes en esta ronda</p>
+            <p class="text-sm font-medium">{{ judgeDetailFilter ? 'Sin resultados para ese filtro' : 'No hay participantes en esta ronda' }}</p>
           </div>
         </div>
       </DialogContent>
