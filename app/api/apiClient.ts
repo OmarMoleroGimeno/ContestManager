@@ -1,21 +1,24 @@
-// Rely on Nuxt auto-imported global $fetch for SSR compatibility
+import { useAuthStore } from '~/stores/auth'
 
 /**
- * Instancia del cliente HTTP basado en $fetch de Nuxt.
- * Totalmente compatible con SSR, y permite inyectar interceptores centralizados.
+ * HTTP client based on Nuxt's $fetch.
+ * Automatically injects the Supabase session token for authenticated requests.
  */
 export const apiClient = $fetch.create({
-  // Interceptor antes de enviar (Útil para Headers o Tokens)
-  onRequest({ request, options }) {
-    // Ejemplo:
-    // options.headers = new Headers(options.headers || {})
-    // options.headers.set('Authorization', `Bearer token`)
+  onRequest({ options }) {
+    if (import.meta.client) {
+      const authStore = useAuthStore()
+      const token = authStore.session?.access_token
+      if (token) {
+        options.headers = {
+          ...(options.headers as Record<string, string> || {}),
+          Authorization: `Bearer ${token}`
+        }
+      }
+    }
   },
-  
-  // Interceptor global ante errores 
-  onResponseError({ request, response, options }) {
-    console.error(`[API Error ${response.status}] a ${request.toString()}`, response._data)
-    
-    // Aquí podemos disparar eventos globales para "sesión expirada" o notificaciones
+
+  onResponseError({ response }) {
+    console.error(`[API Error ${response.status}]`, response._data)
   }
 })

@@ -16,6 +16,7 @@ import {
   Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger 
 } from '@/components/ui/drawer'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { Progress } from '@/components/ui/progress'
 import {
   NumberField,
@@ -24,10 +25,10 @@ import {
   NumberFieldIncrement,
   NumberFieldInput
 } from '@/components/ui/number-field'
-import { 
-  ArrowLeft, Users, UserPlus, Search, 
+import {
+  ArrowLeft, Users, UserPlus, Search,
   Trash2, Trophy, Settings, Settings2, Layers, Plus, Play, Eye, UserCheck, Activity, Swords, CalendarRange, Medal, Sparkles, Link, ClipboardCheck,
-  ChevronLeft, ChevronRight, Check
+  ChevronLeft, ChevronRight, Check, Pencil, Save, X
 } from 'lucide-vue-next'
 import {
   Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
@@ -84,6 +85,11 @@ watch(selectedRoundId, (newId) => {
     contestStore.fetchRoundSummary(newId)
   }
 }, { immediate: true })
+
+// Real-time: refresh summary whenever a judge submits or updates a score
+useRoundScoresRealtime(selectedRoundId, (roundId) => {
+  contestStore.fetchRoundSummary(roundId)
+})
 
 const getParticipantScoreProgress = (pId: string) => {
   const summary = currentRoundSummary.value?.participant_summaries?.find((s: any) => s.participant_id === pId)
@@ -346,6 +352,42 @@ const currentParticipantDetails = computed(() => {
   if (!selectedParticipantId.value || !currentRoundSummary.value) return null
   return { ...currentRoundSummary.value.participant_summaries.find((s:any) => s.participant_id === selectedParticipantId.value), participant: participants.value.find(p => p.id === selectedParticipantId.value) }
 })
+
+// Editable judge scores in participant detail modal
+const editingJudgeId = ref<string|null>(null)
+const editDraft = ref<{ value: number; notes: string; promote: boolean }>({ value: 0, notes: '', promote: false })
+const isSavingScore = ref(false)
+
+const startEditing = (score: any) => {
+  editingJudgeId.value = score.judge_id
+  editDraft.value = { value: Number(score.value), notes: score.notes || '', promote: score.promote ?? false }
+}
+const cancelEditing = () => { editingJudgeId.value = null }
+
+const saveEditedScore = async (judgeId: string) => {
+  if (!selectedParticipantId.value || !selectedRoundId.value) return
+  isSavingScore.value = true
+  try {
+    await $fetch('/api/scores' as any, {
+      method: 'POST',
+      body: {
+        round_id: selectedRoundId.value,
+        participant_id: selectedParticipantId.value,
+        judge_id: judgeId,
+        value: editDraft.value.value,
+        notes: editDraft.value.notes,
+        promote: editDraft.value.promote
+      }
+    })
+    toast.success('Puntuación actualizada')
+    editingJudgeId.value = null
+    await contestStore.fetchRoundSummary(selectedRoundId.value)
+  } catch (e: any) {
+    toast.error('Error al guardar: ' + (e?.data?.statusMessage || e?.message || 'Error desconocido'))
+  } finally {
+    isSavingScore.value = false
+  }
+}
 
 const handleStartRound = async (id: string) => { await contestStore.startRound(id); toast.success('Ronda iniciada') }
 const handleCreateRound = async () => {
@@ -773,7 +815,15 @@ const contestSettings = computed(() => {
                           <span :class="['text-xl font-bold tracking-tight', getParticipantScoreProgress(rp.participant_id).isCompleted ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-200 dark:text-zinc-800']">
                             {{ currentRoundSummary?.participant_summaries.find((s:any) => s.participant_id === rp.participant_id)?.average.toFixed(2) || '0.00' }}
                           </span>
-                          <Badge v-if="getParticipantScoreProgress(rp.participant_id).isCompleted" variant="outline" class="h-4 text-[8px] bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-md font-bold uppercase tracking-widest shadow-sm">Auditado</Badge>
+                          <div class="flex items-center gap-1 flex-wrap justify-end">
+                            <Badge v-if="getParticipantScoreProgress(rp.participant_id).isCompleted" variant="outline" class="h-4 text-[8px] bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-500/30 text-emerald-600 dark:text-emerald-400 rounded-md font-bold uppercase tracking-widest shadow-sm">Auditado</Badge>
+                            <Badge
+                              v-if="(currentRoundSummary?.participant_summaries.find((s:any) => s.participant_id === rp.participant_id)?.promotes ?? 0) > 0"
+                              class="h-4 text-[8px] bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-700 text-blue-600 dark:text-blue-400 rounded-md font-bold uppercase tracking-widest shadow-sm border"
+                            >
+                              +{{ currentRoundSummary?.participant_summaries.find((s:any) => s.participant_id === rp.participant_id)?.promotes }} prom.
+                            </Badge>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -841,50 +891,138 @@ const contestSettings = computed(() => {
     </div>
 
     <!-- GLOBAL DIALOGS -->
-    <Dialog v-model:open="isParticipantDetailOpen">
-      <DialogContent class="max-w-2xl rounded-2xl overflow-hidden p-0 border-2 border-zinc-200 dark:border-zinc-800 shadow-lg bg-white dark:bg-zinc-950">
-        <div class="bg-zinc-900 dark:bg-zinc-100 p-8 text-white dark:text-zinc-900 relative">
-          <div class="absolute right-8 top-8 opacity-10 rotate-12"><Users class="w-24 h-24" /></div>
-          <div class="relative flex justify-between items-end">
-            <div>
-              <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Expediente de Calificación Técnica</span>
-              <h2 class="text-3xl font-bold tracking-tight mt-2 leading-none uppercase">{{ currentParticipantDetails?.participant?.name }}</h2>
-            </div>
-            <div class="text-right flex flex-col items-end">
-              <span class="text-5xl font-black tracking-tighter leading-none">{{ currentParticipantDetails?.average.toFixed(2) }}</span>
-              <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-3 bg-white/5 dark:bg-zinc-900/5 px-4 py-1.5 rounded-md border-2 border-white/10 dark:border-zinc-900/10">Ratio Media Final</p>
-            </div>
+    <Dialog v-model:open="isParticipantDetailOpen" @update:open="(v) => { if (!v) cancelEditing() }">
+      <DialogContent class="max-w-2xl rounded-2xl overflow-hidden p-0 border border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-950">
+        <!-- Header: clean card style matching the rest of the app -->
+        <div class="p-6 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex items-center gap-4">
+          <div class="w-11 h-11 rounded-xl bg-zinc-900 dark:bg-zinc-100 flex items-center justify-center shadow-sm shrink-0">
+            <Users class="w-5 h-5 text-white dark:text-zinc-900" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Puntuaciones del participante</p>
+            <h2 class="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 truncate uppercase">
+              {{ currentParticipantDetails?.participant?.name }}
+            </h2>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Media</p>
+            <span class="text-3xl font-black tracking-tighter text-zinc-900 dark:text-zinc-100">
+              {{ currentParticipantDetails?.average?.toFixed(2) ?? '—' }}
+            </span>
           </div>
         </div>
-        <div class="p-8">
-          <Table>
-            <TableHeader>
-              <TableRow class="border-zinc-100 dark:border-zinc-900 bg-transparent hover:bg-transparent">
-                <TableHead class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 pb-4">Jurado Asignado</TableHead>
-                <TableHead class="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-400 pb-4">Calificación</TableHead>
-                <TableHead class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 pb-4">Observaciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow 
-                v-for="s in currentParticipantDetails?.judge_details" 
-                :key="s.judge_id" 
-                class="border-zinc-100 dark:border-zinc-900 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-all font-medium last:border-0"
-              >
-                <TableCell class="font-bold text-[13px] py-4 text-zinc-900 dark:text-zinc-100">
+
+        <!-- Editable table -->
+        <div class="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+          <div
+            v-for="s in currentParticipantDetails?.judge_details"
+            :key="s.judge_id"
+            class="rounded-xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900/30 overflow-hidden"
+          >
+            <!-- Judge row header -->
+            <div class="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-100 dark:border-zinc-800">
+              <div class="flex items-center gap-2">
+                <Avatar class="w-7 h-7">
+                  <AvatarFallback class="text-[10px] font-bold bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300">
+                    {{ ((currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'J').charAt(0).toUpperCase() }}
+                  </AvatarFallback>
+                </Avatar>
+                <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                   {{ (currentRoundSummary?.judges?.find((j:any) => j.user_id === s.judge_id) as any)?.name || 'Jurado' }}
-                </TableCell>
-                <TableCell class="text-center">
-                  <Badge variant="secondary" class="font-black rounded-md px-3 py-1 text-base border-2 shadow-sm" :class="getStatusClasses('active')">
-                    {{ s.value.toFixed(1) }}
-                  </Badge>
-                </TableCell>
-                <TableCell class="text-[11px] text-zinc-500 dark:text-zinc-400 italic max-w-[250px] leading-relaxed pr-4">
-                  "{{ s.notes || 'Sin observaciones adicionales por parte de la mesa.' }}"
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                </span>
+              </div>
+              <!-- Edit / Save / Cancel buttons -->
+              <div v-if="editingJudgeId === s.judge_id" class="flex gap-1.5">
+                <Button size="sm" variant="ghost" class="h-7 px-2 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300" @click="cancelEditing">
+                  <X class="w-3.5 h-3.5 mr-1" /> Cancelar
+                </Button>
+                <Button size="sm" class="h-7 px-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300" :disabled="isSavingScore" @click="saveEditedScore(s.judge_id)">
+                  <Save class="w-3.5 h-3.5 mr-1" /> {{ isSavingScore ? 'Guardando…' : 'Guardar' }}
+                </Button>
+              </div>
+              <Button v-else size="sm" variant="ghost" class="h-7 px-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300" @click="startEditing(s)">
+                <Pencil class="w-3.5 h-3.5 mr-1" /> Editar
+              </Button>
+            </div>
+
+            <!-- Row body: view mode -->
+            <div v-if="editingJudgeId !== s.judge_id" class="grid grid-cols-3 gap-4 px-4 py-3 text-sm">
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Nota</p>
+                <Badge variant="secondary" class="font-black rounded-md px-3 py-1 text-base border-2 shadow-sm" :class="getStatusClasses('active')">
+                  {{ Number(s.value).toFixed(1) }}
+                </Badge>
+              </div>
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Promociona</p>
+                <Badge v-if="s.promote" class="bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-700 font-bold border-2 text-[10px] uppercase tracking-wide">
+                  Sí
+                </Badge>
+                <span v-else class="text-zinc-300 dark:text-zinc-600 text-xs font-medium">No</span>
+              </div>
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mb-1">Observaciones</p>
+                <p class="text-[12px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
+                  {{ s.notes || 'Sin observaciones.' }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Row body: edit mode -->
+            <div v-else class="px-4 py-4 space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <!-- Score input -->
+                <div class="space-y-1.5">
+                  <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Nota</Label>
+                  <Input
+                    v-model.number="editDraft.value"
+                    type="number"
+                    min="0"
+                    :max="currentRound?.max_score ?? 10"
+                    step="0.1"
+                    class="text-center font-black text-xl h-12 border-2 border-zinc-200 dark:border-zinc-700 focus:border-zinc-900 dark:focus:border-zinc-100 rounded-xl"
+                  />
+                </div>
+                <!-- Promote toggle -->
+                <div class="space-y-1.5">
+                  <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Promocionar</Label>
+                  <div
+                    class="h-12 rounded-xl border-2 flex items-center justify-between px-4 cursor-pointer transition-all select-none"
+                    :class="editDraft.promote
+                      ? 'border-blue-400 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-600'
+                      : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/30'"
+                    @click="editDraft.promote = !editDraft.promote"
+                  >
+                    <span class="text-sm font-semibold" :class="editDraft.promote ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-400'">
+                      {{ editDraft.promote ? 'Sí, promocionar' : 'No promocionar' }}
+                    </span>
+                    <div
+                      class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all"
+                      :class="editDraft.promote ? 'bg-blue-500 border-blue-500' : 'border-zinc-300 dark:border-zinc-600'"
+                    >
+                      <Check v-if="editDraft.promote" class="w-3 h-3 text-white" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Notes -->
+              <div class="space-y-1.5">
+                <Label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Observaciones</Label>
+                <Textarea
+                  v-model="editDraft.notes"
+                  placeholder="Añade observaciones sobre este participante…"
+                  rows="3"
+                  class="resize-none border-2 border-zinc-200 dark:border-zinc-700 focus:border-zinc-900 dark:focus:border-zinc-100 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state -->
+          <div v-if="!currentParticipantDetails?.judge_details?.length" class="text-center py-10 text-zinc-400">
+            <ClipboardCheck class="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p class="text-sm font-medium">Ningún jurado ha puntuado aún</p>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -909,20 +1047,30 @@ const contestSettings = computed(() => {
                   <TableHead v-for="j in currentRoundSummary?.judges" :key="j.user_id" class="text-center text-[10px] font-bold uppercase tracking-widest text-zinc-400 border-x border-zinc-100 dark:border-zinc-800">
                     {{ (j.name || '').split(' ')[0] }}
                   </TableHead>
+                  <TableHead class="text-center text-[10px] font-bold uppercase tracking-widest text-blue-500 dark:text-blue-400 border-x border-zinc-100 dark:border-zinc-800">
+                    Promo.
+                  </TableHead>
                   <TableHead class="text-right pr-8 text-[10px] font-bold uppercase tracking-widest text-zinc-900 dark:text-zinc-100 bg-zinc-100/50 dark:bg-zinc-800/50">
-                    Puntaje Global
+                    Media
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow 
-                  v-for="s in currentRoundSummary?.participant_summaries" 
-                  :key="s.participant_id" 
+                <TableRow
+                  v-for="s in currentRoundSummary?.participant_summaries"
+                  :key="s.participant_id"
                   class="border-zinc-50 dark:border-zinc-900 hover:bg-zinc-50/30 dark:hover:bg-zinc-900/30 transition-all last:border-0"
                 >
                   <TableCell class="pl-8 py-4 font-bold text-sm text-zinc-900 dark:text-zinc-100">{{ participants.find(p => p.id === s.participant_id)?.name }}</TableCell>
                   <TableCell v-for="j in currentRoundSummary?.judges" :key="j.user_id" class="text-center text-sm font-medium text-zinc-400 border-x border-zinc-50 dark:border-zinc-900">
-                    {{ s.judge_details?.find((d:any) => d.judge_id === j.user_id)?.value.toFixed(1) || '-' }}
+                    <div class="flex flex-col items-center gap-0.5">
+                      <span>{{ s.judge_details?.find((d:any) => d.judge_id === j.user_id)?.value?.toFixed(1) || '-' }}</span>
+                      <span v-if="s.judge_details?.find((d:any) => d.judge_id === j.user_id)?.promote" class="text-[9px] text-blue-500 font-bold">▲</span>
+                    </div>
+                  </TableCell>
+                  <TableCell class="text-center border-x border-zinc-50 dark:border-zinc-900">
+                    <span v-if="s.promotes > 0" class="text-xs font-black text-blue-600 dark:text-blue-400">{{ s.promotes }}</span>
+                    <span v-else class="text-zinc-300 dark:text-zinc-700 text-xs">—</span>
                   </TableCell>
                   <TableCell class="text-right pr-8 font-black text-lg text-zinc-900 dark:text-zinc-100 bg-zinc-50/30 dark:bg-zinc-800/30">
                     {{ s.average.toFixed(2) }}

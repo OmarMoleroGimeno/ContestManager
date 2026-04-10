@@ -1,26 +1,38 @@
 import { defineEventHandler, createError, readBody } from 'h3'
-import { serverSupabaseClient } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
-  const client = serverSupabaseClient(event)
+  const client = serverSupabaseAdmin()
   const body = await readBody(event)
-  
-  // Calculate weighted sum value based on criteria_scores
-  // Body example: { round_id, participant_id, judge_id, criteria_scores: { "id": score, ... } }
-  let value = 0
-  if (body.criteria_scores) {
-     const criteriaIds = Object.keys(body.criteria_scores)
-     if (criteriaIds.length > 0) {
-       const { data: criteria } = await client.from('score_criteria').select('id, weight').in('id', criteriaIds)
-       if (criteria) {
-         for (const crit of criteria) {
-            value += (body.criteria_scores[crit.id] || 0) * Number(crit.weight)
-         }
-       }
-     }
+
+  const { round_id, participant_id, judge_id, value, notes, promote } = body
+
+  if (!round_id || !participant_id || !judge_id) {
+    throw createError({ statusCode: 400, statusMessage: 'round_id, participant_id and judge_id are required' })
   }
-  
-  const { data, error } = await client.from('scores').insert({ ...body, value }).select().single()
+
+  if (value === undefined || value === null || isNaN(Number(value))) {
+    throw createError({ statusCode: 400, statusMessage: 'value is required and must be a number' })
+  }
+
+  // Check if score already exists for this judge/participant/round (upsert)
+  const { data, error } = await client
+    .from('scores')
+    .upsert(
+      {
+        round_id,
+        participant_id,
+        judge_id,
+        value: Number(value),
+        notes: notes ?? null,
+        promote: promote ?? false,
+        submitted_at: new Date().toISOString()
+      },
+      { onConflict: 'round_id,participant_id,judge_id' }
+    )
+    .select()
+    .single()
+
   if (error) throw createError({ statusCode: 500, statusMessage: error.message })
   return data
 })
