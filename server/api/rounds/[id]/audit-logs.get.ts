@@ -1,0 +1,36 @@
+import { defineEventHandler, createError, getRouterParam } from 'h3'
+import { serverSupabaseAdmin } from '~~/server/utils/supabase'
+
+export default defineEventHandler(async (event) => {
+  const client = serverSupabaseAdmin()
+  const roundId = getRouterParam(event, 'id')
+  if (!roundId) throw createError({ statusCode: 400, statusMessage: 'Missing round ID' })
+
+  const { data, error } = await client
+    .from('score_audit_logs')
+    .select('*')
+    .eq('round_id', roundId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw createError({ statusCode: 500, statusMessage: error.message })
+
+  // Enrich with participant names
+  const participantIds = [...new Set((data ?? []).map(l => l.participant_id))]
+  const judgeIds = [...new Set((data ?? []).filter(l => l.judge_id).map(l => l.judge_id as string))]
+
+  const [{ data: parts }, { data: profiles }] = await Promise.all([
+    client.from('participants').select('id, name').in('id', participantIds),
+    judgeIds.length
+      ? client.from('profiles').select('id, full_name').in('id', judgeIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const partMap = Object.fromEntries((parts ?? []).map(p => [p.id, p.name]))
+  const profileMap = Object.fromEntries((profiles ?? []).map(p => [p.id, p.full_name]))
+
+  return (data ?? []).map(log => ({
+    ...log,
+    participant_name: partMap[log.participant_id] ?? null,
+    judge_name: log.judge_id ? (profileMap[log.judge_id] ?? null) : null,
+  }))
+})

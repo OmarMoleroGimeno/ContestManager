@@ -10,14 +10,54 @@ export default defineEventHandler(async (event) => {
 
   const client = serverSupabaseAdmin()
 
-  // Get the contest by slug
-  const { data: contest, error: contestError } = await client
+  // Fetch ALL contests with this slug (slug is unique per org, not global),
+  // then pick the one where the current user is actually enrolled / member.
+  const { data: slugMatches, error: slugErr } = await client
     .from('contests')
-    .select('id, name, slug, description, type, status, starts_at, ends_at, settings, is_rounds_dynamic')
+    .select('id, name, slug, description, type, status, starts_at, ends_at, settings, is_rounds_dynamic, cover_image_url, created_at')
     .eq('slug', slug)
-    .single()
+  if (slugErr) throw createError({ statusCode: 500, statusMessage: slugErr.message })
+  if (!slugMatches || slugMatches.length === 0) {
+    throw createError({ statusCode: 404, statusMessage: 'Contest not found' })
+  }
 
-  if (contestError || !contest) throw createError({ statusCode: 404, statusMessage: 'Contest not found' })
+  const candidateIds = slugMatches.map((c: any) => c.id)
+
+  // Prefer contest where user is participant
+  const { data: partMatch } = await client
+    .from('participants')
+    .select('contest_id')
+    .eq('user_id', user.id)
+    .in('contest_id', candidateIds)
+    .limit(1)
+    .maybeSingle()
+
+  let resolvedId: string | null = (partMatch as any)?.contest_id ?? null
+
+  if (!resolvedId) {
+    // Fallback: judge / contest member
+    const { data: memByUser } = await client
+      .from('contest_members').select('contest_id')
+      .eq('user_id', user.id).in('contest_id', candidateIds)
+      .limit(1).maybeSingle()
+    resolvedId = (memByUser as any)?.contest_id ?? null
+
+    if (!resolvedId && user.email) {
+      const { data: memByEmail } = await client
+        .from('contest_members').select('contest_id')
+        .eq('email', user.email).is('user_id', null)
+        .in('contest_id', candidateIds)
+        .limit(1).maybeSingle()
+      resolvedId = (memByEmail as any)?.contest_id ?? null
+    }
+  }
+
+  if (!resolvedId) {
+    throw createError({ statusCode: 403, statusMessage: 'Not enrolled in this contest' })
+  }
+
+  const contest = slugMatches.find((c: any) => c.id === resolvedId) as any
+  if (!contest) throw createError({ statusCode: 404, statusMessage: 'Contest not found' })
 
   // Get participant entries for this user in this contest
   const { data: participantEntries, error: pError } = await client
@@ -27,6 +67,10 @@ export default defineEventHandler(async (event) => {
       name,
       status,
       category_id,
+      payment_status,
+      amount_paid_cents,
+      amount_refunded_cents,
+      stripe_payment_intent_id,
       categories!inner(id, name, description, status)
     `)
     .eq('contest_id', contest.id)
@@ -92,11 +136,12 @@ export default defineEventHandler(async (event) => {
   if (categoryIds.length > 0) {
     const { data: roundsData } = await client
       .from('rounds')
-      .select('id, name, order, status, scoring_type, max_score, started_at, closed_at, category_id')
+      .select('id, name, order, status, scoring_type, max_score, started_at, closed_at, category_id, is_ranking, is_published, is_final')
       .in('category_id', categoryIds)
       .order('order', { ascending: true })
 
-    rounds = roundsData ?? []
+    // Hide unpublished ranking pseudo-rounds from participants
+    rounds = (roundsData ?? []).filter((r: any) => !(r.is_ranking === true && r.is_published !== true))
 
     // For each round, check if the participant is enrolled and get their schedule
     const roundIds = rounds.map((r: any) => r.id)
