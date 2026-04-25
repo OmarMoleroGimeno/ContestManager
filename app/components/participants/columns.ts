@@ -1,8 +1,8 @@
-import { h } from 'vue'
+import { h, resolveComponent } from 'vue'
 import type { ColumnDef } from '@tanstack/vue-table'
 import type { Participant } from '~~/types'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import AvatarCell from '@/components/ui/avatar/AvatarCell.vue'
 import { Button } from '@/components/ui/button'
 import { ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-vue-next'
 
@@ -42,17 +42,19 @@ export const createColumns = (onDelete: (id: string) => void): ColumnDef<Partici
       ])
     },
     cell: ({ row }) => {
-      const name = row.getValue('name') as string
-      const email = row.original.email
-      return h('div', { class: 'flex items-center gap-3 py-1' }, [
-        h(Avatar, { class: 'h-8 w-8 rounded-lg border-2 border-zinc-100 dark:border-zinc-800' },
-          () => h(AvatarFallback, { class: 'text-[10px] font-bold bg-zinc-100 dark:bg-zinc-900' }, () => name.substring(0, 2).toUpperCase())
-        ),
-        h('div', { class: 'flex flex-col' }, [
-          h('span', { class: 'text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-tight' }, name),
-          h('span', { class: 'text-[10px] text-zinc-400 font-medium truncate max-w-[160px]' }, email || 'Sin email'),
-        ]),
-      ])
+      const uid = (row.original as any).user_id
+      const inner = h(AvatarCell, {
+        name: row.getValue('name') as string,
+        email: row.original.email,
+        avatarUrl: (row.original as any).avatar_url ?? null,
+      })
+      if (!uid) return inner
+      const NuxtLink = resolveComponent('NuxtLink') as any
+      return h(NuxtLink, {
+        to: `/users/${uid}`,
+        class: 'block hover:opacity-80 transition-opacity',
+        onClick: (e: MouseEvent) => e.stopPropagation(),
+      }, () => inner)
     },
     enableSorting: true,
   },
