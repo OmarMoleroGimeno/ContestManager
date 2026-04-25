@@ -2,7 +2,7 @@ import { h } from 'vue'
 import type { ColumnDef } from '@tanstack/vue-table'
 import type { ContestMember } from '~~/types'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import AvatarCell from '@/components/ui/avatar/AvatarCell.vue'
 import { Button } from '@/components/ui/button'
 import { ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-vue-next'
 
@@ -43,17 +43,11 @@ export const createColumns = (onDelete: (id: string) => void): ColumnDef<Contest
     },
     cell: ({ row }) => {
       const name = (row.getValue('full_name') as string | null) || (row.original.email ?? '')
-      const email = row.original.email
-      const initials = name.substring(0, 2).toUpperCase()
-      return h('div', { class: 'flex items-center gap-3 py-1' }, [
-        h(Avatar, { class: 'h-8 w-8 rounded-lg border-2 border-zinc-100 dark:border-zinc-800' },
-          () => h(AvatarFallback, { class: 'text-[10px] font-bold bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100' }, () => initials)
-        ),
-        h('div', { class: 'flex flex-col' }, [
-          h('span', { class: 'text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-tight' }, name),
-          h('span', { class: 'text-[10px] text-zinc-400 font-medium truncate max-w-[160px]' }, email || ''),
-        ]),
-      ])
+      return h(AvatarCell, {
+        name,
+        email: row.original.email,
+        avatarUrl: (row.original as any).avatar_url ?? null,
+      })
     },
     enableSorting: true,
   },

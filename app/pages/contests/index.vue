@@ -11,7 +11,7 @@ import { storeToRefs } from 'pinia'
 const contestStore = useContestStore()
 const { contests } = storeToRefs(contestStore)
 
-await contestStore.fetchContests()
+await useAsyncData('contests-list', () => contestStore.fetchContests())
 
 const handleDelete = async (id: string) => {
   try {
