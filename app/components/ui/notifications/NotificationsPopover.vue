@@ -27,17 +27,31 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 }
 
-// Split body text into segments, turning the quoted contest name into a link
-function bodyParts(body: string, payload: Record<string, unknown>) {
+// Route per notification type
+function targetPath(type: string, payload: Record<string, unknown>): string | null {
   const slug = payload?.contest_slug as string | undefined
+  if (!slug) return null
+  if (type === 'org_participant_enrolled' || type === 'org_participant_unenrolled') {
+    return `/contests/${slug}/inscriptions`
+  }
+  if (type === 'judge_assigned') {
+    return `/contests/${slug}`
+  }
+  return `/my-contests/${slug}`
+}
+
+// Split body text into segments, turning the quoted contest name into a link
+function bodyParts(notification: any) {
+  const body = notification.body as string
+  const payload = (notification.payload || {}) as Record<string, unknown>
   const name = payload?.contest_name as string | undefined
-  if (!slug || !name) return [{ text: body, link: null }]
+  const path = targetPath(notification.type, payload)
+  if (!path || !name) return [{ text: body, link: null }]
 
   const quoted = `"${name}"`
   const idx = body.indexOf(quoted)
   if (idx === -1) return [{ text: body, link: null }]
 
-  const path = `/my-contests/${slug}`
   return [
     { text: body.slice(0, idx), link: null },
     { text: quoted, link: path },
@@ -60,18 +74,19 @@ function bodyParts(body: string, payload: Record<string, unknown>) {
       </Button>
     </PopoverTrigger>
 
-    <PopoverContent class="w-80 p-1" align="end">
-      <div class="flex items-baseline justify-between gap-4 px-3 py-2">
+    <PopoverContent class="w-80 p-1 max-h-[480px] flex flex-col" align="end">
+      <div class="flex items-baseline justify-between gap-4 px-3 py-2 shrink-0">
         <div class="text-sm font-semibold">Notificaciones</div>
       </div>
 
-      <div role="separator" aria-orientation="horizontal" class="-mx-1 my-1 h-px bg-border" />
+      <div role="separator" aria-orientation="horizontal" class="-mx-1 my-1 h-px bg-border shrink-0" />
 
       <div v-if="loading" class="px-3 py-6 text-center text-sm text-muted-foreground">
         Cargando...
       </div>
 
-      <template v-else-if="notifications.length > 0">
+      <div v-else class="flex-1 overflow-y-auto -mx-1 px-1">
+      <template v-if="notifications.length > 0">
         <div
           v-for="notification in notifications"
           :key="notification.id"
@@ -82,7 +97,7 @@ function bodyParts(body: string, payload: Record<string, unknown>) {
             <div class="flex-1 space-y-1">
               <p class="font-medium text-foreground leading-snug">{{ notification.title }}</p>
               <p class="text-foreground/70 leading-snug">
-                <template v-for="(part, i) in bodyParts(notification.body, notification.payload)" :key="i">
+                <template v-for="(part, i) in bodyParts(notification)" :key="i">
                   <NuxtLink
                     v-if="part.link"
                     :to="part.link"
@@ -106,6 +121,7 @@ function bodyParts(body: string, payload: Record<string, unknown>) {
 
       <div v-else class="px-3 py-6 text-center text-sm text-muted-foreground">
         No tienes notificaciones
+      </div>
       </div>
     </PopoverContent>
   </Popover>
