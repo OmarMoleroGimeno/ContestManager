@@ -102,7 +102,7 @@ onUnmounted(() => { if (timer) clearTimeout(timer) })
               Stripe aún no ha confirmado. Recarga la página o revisa tu email en unos minutos.
             </p>
           </div>
-          <Button variant="outline" @click="() => location.reload()">Recargar</Button>
+          <Button variant="outline" @click="() => window.location.reload()">Recargar</Button>
         </template>
 
         <template v-else>
