@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const { data: round, error: roundError } = await client
     .from('rounds')
     .select(`
-      id, name, order, status, scoring_type, max_score, started_at, closed_at, category_id,
+      id, name, order, status, scoring_type, max_score, started_at, closed_at, category_id, is_ranking, is_published, is_final,
       categories!inner(
         id, name, description, contest_id,
         contests!inner(id, name, slug, description, type, status, starts_at, ends_at)
@@ -24,96 +24,93 @@ export default defineEventHandler(async (event) => {
     .single()
 
   if (roundError || !round) throw createError({ statusCode: 404, statusMessage: 'Round not found' })
+  if ((round as any).is_ranking === true && (round as any).is_published !== true) {
+    throw createError({ statusCode: 404, statusMessage: 'Round not found' })
+  }
 
   const category = (round as any).categories
   const contest = category.contests
 
-  // Find the participant record for this user in this contest/category
-  const { data: myParticipant, error: pError } = await client
-    .from('participants')
-    .select('id, name, status')
-    .eq('user_id', user.id)
-    .eq('contest_id', contest.id)
-    .eq('category_id', category.id)
-    .maybeSingle()
+  // Parallel: participant lookup + allSlots + criteria (independent of auth result)
+  const [participantRes, allSlotsRes, criteriaRes] = await Promise.all([
+    client
+      .from('participants')
+      .select('id, name, status')
+      .eq('user_id', user.id)
+      .eq('contest_id', contest.id)
+      .eq('category_id', category.id)
+      .maybeSingle(),
+    client
+      .from('round_participants')
+      .select(`
+        id, participant_id, order, scheduled_at, location, is_qualified,
+        participants!inner(id, name, first_name, last_name, country)
+      `)
+      .eq('round_id', roundId)
+      .order('order', { ascending: true }),
+    client
+      .from('score_criteria')
+      .select('id, name, weight, max_value, order')
+      .eq('round_id', roundId)
+      .order('order', { ascending: true }),
+  ])
 
-  if (pError) throw createError({ statusCode: 500, statusMessage: pError.message })
-  
+  const myParticipant = participantRes.data
+  if (participantRes.error) throw createError({ statusCode: 500, statusMessage: participantRes.error.message })
+  const allSlots = allSlotsRes.data ?? []
+  const criteria = criteriaRes.data ?? []
+
   let isJudge = false
   if (!myParticipant) {
-    // Try by user_id first, then by email (for records added without user_id)
-    const { data: memberByUserId } = await client
-      .from('contest_members')
-      .select('id, role')
-      .eq('contest_id', contest.id)
-      .eq('user_id', user.id)
-      .eq('role', 'judge')
-      .maybeSingle()
-
-    if (memberByUserId) {
-      isJudge = true
-    } else if (user.email) {
-      const { data: memberByEmail } = await client
+    const [memberByUserIdRes, memberByEmailRes] = await Promise.all([
+      client
         .from('contest_members')
         .select('id, role')
         .eq('contest_id', contest.id)
-        .eq('email', user.email)
+        .eq('user_id', user.id)
         .eq('role', 'judge')
-        .is('user_id', null)
-        .maybeSingle()
-      if (memberByEmail) isJudge = true
-    }
-
+        .maybeSingle(),
+      user.email
+        ? client
+            .from('contest_members')
+            .select('id, role')
+            .eq('contest_id', contest.id)
+            .eq('email', user.email)
+            .eq('role', 'judge')
+            .is('user_id', null)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    if (memberByUserIdRes.data || memberByEmailRes.data) isJudge = true
     if (!isJudge) throw createError({ statusCode: 403, statusMessage: 'Not a participant or judge in this round' })
   }
 
-  // Get my slot in the round
-  let mySlot = null
-  if (myParticipant) {
-    const { data } = await client
-      .from('round_participants')
-      .select('id, order, scheduled_at, location, is_qualified')
-      .eq('round_id', roundId)
-      .eq('participant_id', myParticipant.id)
-      .maybeSingle()
-      
-    mySlot = data
-  }
-
-  // Get all participants in this round (public info — name and slot only)
-  const { data: allSlots } = await client
-    .from('round_participants')
-    .select(`
-      id, participant_id, order, scheduled_at, location, is_qualified,
-      participants!inner(id, name, first_name, last_name, country)
-    `)
-    .eq('round_id', roundId)
-    .order('order', { ascending: true })
-
-  // Get my scores if round is closed or active
-  let myScores: any[] = []
-  if (myParticipant) {
-    const { data } = await client
-      .from('scores')
-      .select('id, value, criteria_scores, notes, submitted_at, judge_id')
-      .eq('round_id', roundId)
-      .eq('participant_id', myParticipant.id)
-    myScores = data ?? []
-  } else if (isJudge) {
-    const { data } = await client
-      .from('scores')
-      .select('id, participant_id, value, criteria_scores, notes, submitted_at')
-      .eq('round_id', roundId)
-      .eq('judge_id', user.id)
-    myScores = data ?? []
-  }
-
-  // Get score criteria for this round
-  const { data: criteria } = await client
-    .from('score_criteria')
-    .select('id, name, weight, max_value, order')
-    .eq('round_id', roundId)
-    .order('order', { ascending: true })
+  // Slot + scores (parallel)
+  const [mySlotRes, myScoresRes] = await Promise.all([
+    myParticipant
+      ? client
+          .from('round_participants')
+          .select('id, order, scheduled_at, location, is_qualified')
+          .eq('round_id', roundId)
+          .eq('participant_id', myParticipant.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    myParticipant
+      ? client
+          .from('scores')
+          .select('id, value, criteria_scores, notes, submitted_at, judge_id')
+          .eq('round_id', roundId)
+          .eq('participant_id', myParticipant.id)
+      : isJudge
+        ? client
+            .from('scores')
+            .select('id, participant_id, value, criteria_scores, notes, submitted_at')
+            .eq('round_id', roundId)
+            .eq('judge_id', user.id)
+        : Promise.resolve({ data: [] }),
+  ])
+  const mySlot = mySlotRes.data ?? null
+  const myScores: any[] = (myScoresRes.data as any[]) ?? []
 
   // Compute average score if any scores exist
   const avgScore = myScores?.length

@@ -24,7 +24,10 @@ const isSubmitting = ref(false)
 const form = ref({
   name: '',
   description: '',
-  tier: ''
+  tier: '',
+  min_age: '' as string | number,
+  max_age: '' as string | number,
+  max_participants: '' as string | number,
 })
 
 const handleCreate = async () => {
@@ -35,13 +38,20 @@ const handleCreate = async () => {
     // We update the store call to handle the new payload if it supports it, 
     // or we'll just use $fetch directly if the store action is too simple.
     // Based on the store, createCategory only takes a name. Let's fix that.
+    const toInt = (v: string | number) => {
+      const n = typeof v === 'string' ? parseInt(v, 10) : v
+      return Number.isFinite(n) ? n : null
+    }
     await store.createCategory(form.value.name, {
       description: form.value.description,
-      tier: form.value.tier
+      tier: form.value.tier,
+      min_age: toInt(form.value.min_age) as any,
+      max_age: toInt(form.value.max_age) as any,
+      max_participants: toInt(form.value.max_participants) as any,
     })
-    
+
     toast.success('Categoría creada correctamente')
-    form.value = { name: '', description: '', tier: '' }
+    form.value = { name: '', description: '', tier: '', min_age: '', max_age: '', max_participants: '' }
     isOpen.value = false
   } catch (error) {
     toast.error('Error al crear la categoría')
@@ -86,6 +96,20 @@ const handleCreate = async () => {
             v-model="form.tier"
             placeholder="Ej. Profesional, Amateur..."
           />
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="grid gap-2">
+            <Label for="min_age">Edad mín.</Label>
+            <Input id="min_age" v-model="form.min_age" type="number" min="0" placeholder="—" />
+          </div>
+          <div class="grid gap-2">
+            <Label for="max_age">Edad máx.</Label>
+            <Input id="max_age" v-model="form.max_age" type="number" min="0" placeholder="—" />
+          </div>
+          <div class="grid gap-2">
+            <Label for="max_participants">Cupo</Label>
+            <Input id="max_participants" v-model="form.max_participants" type="number" min="1" placeholder="∞" />
+          </div>
         </div>
         <div class="grid gap-2">
           <Label for="desc">Descripción Corta</Label>

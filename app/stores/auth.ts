@@ -119,6 +119,15 @@ export const useAuthStore = defineStore('auth', () => {
     return getSupabase().auth.signUp({ email, password })
   }
 
+  const signInWithOAuth = async (provider: 'google' | 'github', returnTo = '') => {
+    const redirectTo = (() => {
+      if (typeof window === 'undefined') return undefined
+      const base = `${window.location.origin}/auth/callback`
+      return returnTo ? `${base}?returnTo=${encodeURIComponent(returnTo)}` : base
+    })()
+    return getSupabase().auth.signInWithOAuth({ provider, options: { redirectTo } })
+  }
+
   const signOut = async () => {
     await getSupabase().auth.signOut()
     user.value = null
@@ -167,6 +176,7 @@ export const useAuthStore = defineStore('auth', () => {
     init,
     signIn,
     signUp,
+    signInWithOAuth,
     signOut,
     fetchProfile,
     fetchOrganization,

@@ -36,10 +36,12 @@ const props = defineProps<{
   searchColumn?: string
   defaultPageSize?: number
   flush?: boolean
+  disableRowSelect?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:selection': [string[]]
+  'row-click': [any]
 }>()
 
 const sorting = ref<SortingState>([])
@@ -134,7 +136,7 @@ defineExpose({
               v-for="row in table.getRowModel().rows" :key="row.id"
               :data-state="row.getIsSelected() ? 'selected' : undefined"
               class="group hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors border-b border-zinc-100 dark:border-zinc-800 cursor-pointer"
-              @click="row.toggleSelected()"
+              @click="() => { if (disableRowSelect) { emit('row-click', row.original) } else { row.toggleSelected(); emit('row-click', row.original) } }"
             >
               <TableCell v-for="cell in row.getVisibleCells()" :key="cell.id" class="py-4">
                 <FlexRender :render="cell.column.columnDef.cell" :props="cell.getContext()" />
@@ -154,10 +156,13 @@ defineExpose({
     
     <div :class="cn('flex items-center justify-between space-x-2 py-6 px-2', flush && 'py-4 px-4')">
       <div class="text-sm text-zinc-500 font-medium flex items-center gap-2">
-        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-[10px] font-bold">
-          {{ table.getFilteredSelectedRowModel().rows.length }}
-        </span>
-        <span class="text-xs">de {{ table.getFilteredRowModel().rows.length }} seleccionados</span>
+        <template v-if="!disableRowSelect">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-[10px] font-bold">
+            {{ table.getFilteredSelectedRowModel().rows.length }}
+          </span>
+          <span class="text-xs">de {{ table.getFilteredRowModel().rows.length }} seleccionados</span>
+        </template>
+        <span v-else class="text-xs">{{ table.getFilteredRowModel().rows.length }} resultado(s)</span>
       </div>
       <div class="flex items-center gap-2">
         <Button

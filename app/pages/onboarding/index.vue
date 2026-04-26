@@ -7,11 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 definePageMeta({
-  layout: 'auth',
-  middleware: ['auth']
+  layout: 'auth'
 })
 
 const authStore = useAuthStore()
+const route = useRoute()
+const returnTo = computed(() => {
+  const raw = (route.query.returnTo as string) || ''
+  return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : ''
+})
 const step = ref<'type' | 'details'>('type')
 const accountType = ref<'org_owner' | 'user'>('user')
 const fullName = ref('')
@@ -71,7 +75,7 @@ async function handleSubmit() {
 
   loading.value = false
   toast.success('¡Perfil configurado!')
-  await navigateTo('/dashboard')
+  await navigateTo(returnTo.value || '/dashboard')
 }
 </script>
 

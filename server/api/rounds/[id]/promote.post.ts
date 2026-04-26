@@ -42,7 +42,8 @@ export default defineEventHandler(async (event) => {
         name: body.nextRoundName || `Ronda ${currentRound.order + 1}`,
         order: currentRound.order + 1,
         status: 'pending',
-        scoring_type: currentRound.scoring_type
+        scoring_type: currentRound.scoring_type,
+        is_final: !!body.isFinal
       })
       .select()
       .single()

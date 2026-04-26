@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   const client = serverSupabaseAdmin()
   const body = await readBody(event)
 
-  const { round_id, participant_id, judge_id, value, notes, promote } = body
+  const { round_id, participant_id, judge_id, value, notes, promote, admin_user_id, admin_user_name } = body
 
   if (!round_id || !participant_id || !judge_id) {
     throw createError({ statusCode: 400, statusMessage: 'round_id, participant_id and judge_id are required' })
@@ -15,7 +15,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'value is required and must be a number' })
   }
 
-  // Check if score already exists for this judge/participant/round (upsert)
+  const isAdminAction = !!admin_user_id
+
+  // Read existing score for audit
+  const { data: existing } = await client
+    .from('scores')
+    .select('value')
+    .eq('round_id', round_id)
+    .eq('participant_id', participant_id)
+    .eq('judge_id', judge_id)
+    .maybeSingle()
+
+  const oldValue = existing ? Number(existing.value) : null
+
+  // Upsert score
   const { data, error } = await client
     .from('scores')
     .upsert(
@@ -26,7 +39,9 @@ export default defineEventHandler(async (event) => {
         value: Number(value),
         notes: notes ?? null,
         promote: promote ?? false,
-        submitted_at: new Date().toISOString()
+        submitted_at: new Date().toISOString(),
+        set_by_admin: isAdminAction,
+        admin_user_id: admin_user_id ?? null,
       },
       { onConflict: 'round_id,participant_id,judge_id' }
     )
@@ -34,5 +49,21 @@ export default defineEventHandler(async (event) => {
     .single()
 
   if (error) throw createError({ statusCode: 500, statusMessage: error.message })
+
+  // Write audit log
+  const changedBy = admin_user_id ?? judge_id
+  await client.from('score_audit_logs').insert({
+    round_id,
+    participant_id,
+    judge_id,
+    changed_by: changedBy,
+    changed_by_name: admin_user_name ?? null,
+    action: oldValue !== null ? 'score_updated' : 'score_set',
+    old_value: oldValue,
+    new_value: Number(value),
+    notes: notes ?? null,
+    is_admin_action: isAdminAction,
+  })
+
   return data
 })

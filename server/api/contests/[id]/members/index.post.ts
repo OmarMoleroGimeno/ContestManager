@@ -6,12 +6,17 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   const body = await readBody(event)
 
-  // If no user_id provided but email is given, look up the user in auth.users
-  let userId = body.user_id ?? null
+  // If no user_id provided but email is given, try to resolve an existing auth user
+  let userId: string | null = body.user_id ?? null
   if (!userId && body.email) {
-    const { data: authUser } = await client.auth.admin.getUserByEmail(body.email)
-    if (authUser?.user?.id) {
-      userId = authUser.user.id
+    try {
+      const target = String(body.email).toLowerCase()
+      // listUsers paginates; 1000/page handles most orgs. Could be replaced by an SQL RPC later.
+      const { data: listData } = await client.auth.admin.listUsers({ page: 1, perPage: 1000 })
+      const found = listData?.users?.find((u: any) => (u.email || '').toLowerCase() === target)
+      if (found?.id) userId = found.id
+    } catch {
+      // swallow — fallback to null user_id (column is nullable for external judges)
     }
   }
 

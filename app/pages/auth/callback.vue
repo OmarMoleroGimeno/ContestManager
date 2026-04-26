@@ -7,6 +7,13 @@ definePageMeta({
 })
 
 const authStore = useAuthStore()
+const route = useRoute()
+
+const returnTo = computed(() => {
+  const raw = (route.query.returnTo as string) || ''
+  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw
+  return ''
+})
 
 onMounted(async () => {
   // Give Supabase a moment to process the URL hash / token
@@ -16,18 +23,24 @@ onMounted(async () => {
   await authStore.init()
 
   if (!authStore.isAuthenticated) {
-    await navigateTo('/auth/login')
+    const loginTarget = returnTo.value
+      ? `/auth/login?returnTo=${encodeURIComponent(returnTo.value)}`
+      : '/auth/login'
+    await navigateTo(loginTarget)
     return
   }
 
   // Route based on onboarding completeness
-  if (authStore.needsOnboarding) {
-    await navigateTo('/onboarding')
+  if (authStore.needsOnboarding || authStore.needsOrgSetup) {
+    const obTarget = returnTo.value
+      ? `/onboarding?returnTo=${encodeURIComponent(returnTo.value)}`
+      : '/onboarding'
+    await navigateTo(obTarget)
     return
   }
 
-  if (authStore.needsOrgSetup) {
-    await navigateTo('/onboarding')
+  if (returnTo.value) {
+    await navigateTo(returnTo.value)
     return
   }
 

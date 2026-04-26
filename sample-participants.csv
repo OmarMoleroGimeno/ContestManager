@@ -1,0 +1,6 @@
+nombre,apellidos,fecha_nacimiento,categoria,dni,pais,email,telefono
+Lucía,Fernández Vega,2010-03-14,Piano Juvenil,12345678A,España,lucia.fernandez@example.com,+34600111222
+Mateo,Sánchez Ortiz,2009-07-22,Piano Juvenil,23456789B,España,mateo.sanchez@example.com,+34600222333
+Valentina,López Reyes,2011-11-05,Piano Juvenil,34567890C,España,valentina.lopez@example.com,+34600333444
+Hugo,Castillo Romero,2008-09-30,Piano Juvenil,45678901D,España,hugo.castillo@example.com,+34600444555
+Camila,Vargas Soto,2010-12-18,Piano Juvenil,56789012E,España,camila.vargas@example.com,+34600555666

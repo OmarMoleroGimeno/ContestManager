@@ -49,6 +49,7 @@ export interface Database {
           starts_at: string | null
           ends_at: string | null
           settings: Json | null
+          cover_image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -121,6 +122,9 @@ export interface Database {
           scoring_type: 'numeric' | 'rank' | 'vote'
           max_score: number | null
           next_round_id: string | null
+          is_final: boolean
+          is_ranking: boolean
+          is_published: boolean
           started_at: string | null
           closed_at: string | null
           created_at: string
@@ -263,4 +267,5 @@ export type JudgePoolMember = Database['public']['Tables']['judge_pool_members']
   email: string
   specialty: string | null
   judge_id: string
+  avatar_url: string | null
 }
