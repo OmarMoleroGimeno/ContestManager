@@ -51,7 +51,6 @@ export default defineEventHandler(async (event) => {
   if (invalid.length > 0) {
     throw createError({ statusCode: 400, statusMessage: 'invalid_participant_ids' })
   }
-
   const allPartIds = (allRoundParts ?? []).map((rp: any) => rp.participant_id)
   const notPromotedIds = allPartIds.filter((pid: string) => !body.participantIds.includes(pid))
 

@@ -179,6 +179,7 @@ export const useAuthStore = defineStore('auth', () => {
   const signOut = async (opts: { scope?: 'global' | 'local' | 'others' } = {}) => {
     loading.value = true
     try {
+      // Unsubscribe auth listener first to prevent duplicate state updates
       if (authListener) {
         authListener.subscription.unsubscribe()
         authListener = null

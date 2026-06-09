@@ -23,6 +23,7 @@ const { displayName, initials, profile, isOrgOwner, user } = storeToRefs(authSto
 
 const handleSignOut = async () => {
   await authStore.signOut()
+  // Small delay to ensure auth state is fully cleared before navigation
   await new Promise(resolve => setTimeout(resolve, 50))
   await router.push('/auth/login')
 }

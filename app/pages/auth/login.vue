@@ -63,6 +63,11 @@ watch([password, confirmPassword], () => {
   if (passwordError.value) passwordError.value = ''
 })
 
+// Clear password error when user starts typing
+watch([password, confirmPassword], () => {
+  if (passwordError.value) passwordError.value = ''
+})
+
 function selectDemoUser(val: string) {
   const found = DEMO_USERS.find(u => u.email === val)
   if (!found) return
