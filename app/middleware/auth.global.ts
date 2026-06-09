@@ -11,7 +11,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   const authStore = useAuthStore()
 
-  const isPublic = PUBLIC_PATHS.some((p) => to.path.startsWith(p))
+  const isPublic = to.path === '/' || PUBLIC_PATHS.some((p) => to.path.startsWith(p))
   const isOnboarding = to.path.startsWith(ONBOARDING_PATH)
   const isOrgOnly = ORG_ONLY_PATHS.some((p) => to.path.startsWith(p))
 

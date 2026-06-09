@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, watch } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
 export interface AppNotification {
@@ -93,6 +93,15 @@ export function useNotifications() {
     await fetchNotifications()
     subscribeRealtime(authStore.user.id)
   }
+
+  // Cleanup realtime channel on logout
+  const authStore = useAuthStore()
+  watch(() => authStore.user, (newUser) => {
+    if (!newUser && channel) {
+      unsubscribe()
+      notifications.value = [] // Clear notifications on logout
+    }
+  })
 
   onUnmounted(unsubscribe)
 

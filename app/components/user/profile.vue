@@ -26,7 +26,9 @@ const { displayName, initials, profile, isOrgOwner } = storeToRefs(authStore)
 
 const handleSignOut = async () => {
   await authStore.signOut()
-  router.push('/auth/login')
+  // Small delay to ensure auth state is fully cleared before navigation
+  await new Promise(resolve => setTimeout(resolve, 50))
+  await router.push('/auth/login')
 }
 
 const goToSettings = () => {

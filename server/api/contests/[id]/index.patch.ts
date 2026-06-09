@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
 import { serverSupabaseClient, serverSupabaseAdmin } from '~~/server/utils/supabase'
+import { sendContestStartedEmail } from '~~/server/utils/email'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user
@@ -100,7 +101,29 @@ export default defineEventHandler(async (event) => {
 
   // Use resolved id to avoid slug collision across orgs
   const cur = await loadContest()
+  const prevStatus = cur!.status
   const { data, error } = await client.from('contests').update(body).eq('id', cur!.id).select().single()
   if (error) throw createError({ statusCode: 500, statusMessage: error.message })
+
+  // Send contest_started emails (fire-and-forget)
+  if (body.status === 'active' && prevStatus !== 'active') {
+    const { data: participants } = await admin
+      .from('participants')
+      .select('email, first_name, name')
+      .eq('contest_id', data.id)
+      .eq('status', 'active')
+      .not('email', 'is', null)
+
+    for (const p of participants ?? []) {
+      if (!p.email) continue
+      sendContestStartedEmail({
+        to: p.email,
+        first_name: p.first_name || p.name,
+        contest_name: data.name,
+        contest_slug: data.slug,
+      }).catch(() => {})
+    }
+  }
+
   return data
 })

@@ -220,63 +220,6 @@ const handleOpenAutoFocus = (e: Event) => {
             <!-- Columna Izquierda: Identificación y Parámetros -->
             <div class="space-y-6">
               <div class="grid grid-cols-1 gap-4">
-                <!-- Modo y Rondas -->
-                <div class="space-y-4">
-                  <div class="grid gap-2">
-                    <Label class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
-                      <Target class="w-3.5 h-3.5" /> Modo del Concurso
-                    </Label>
-                    <Select v-model="editForm.mode" :modal="false">
-                      <SelectTrigger class="h-10 border-2">
-                        <SelectValue placeholder="Selecciona el modo">
-                          {{ editForm.mode === 'standard' ? 'Estándar' : editForm.mode === 'tournament' ? 'Torneo' : '' }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="standard">
-                          <div class="flex flex-col items-start gap-0.5 py-1">
-                            <span class="font-bold">Estándar</span>
-                            <span class="text-[10px] text-muted-foreground">Formato tradicional de concurso.</span>
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="tournament">
-                          <div class="flex flex-col items-start gap-0.5 py-1">
-                            <span class="font-bold">Torneo</span>
-                            <span class="text-[10px] text-muted-foreground">Eliminatorias directas.</span>
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <!-- Numero de Rondas (Ahora debajo de Modo) -->
-                  <transition 
-                    enter-active-class="transition duration-300 ease-out" 
-                    enter-from-class="transform -translate-y-2 opacity-0" 
-                    enter-to-class="transform translate-y-0 opacity-100"
-                  >
-                    <div v-if="editForm.mode === 'standard' && !editForm.is_rounds_dynamic" class="grid gap-2">
-                      <Label for="roundsCount" class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                        <Plus class="w-3 h-3" /> Número de Rondas
-                      </Label>
-                      <NumberField 
-                        id="roundsCount" 
-                        v-model="editForm.rounds_count" 
-                        :min="1" 
-                        :max="20"
-                      >
-                        <NumberFieldContent>
-                          <NumberFieldDecrement />
-                          <NumberFieldInput 
-                             class="h-10 px-3 text-sm bg-muted/40 border-2 border-border font-bold text-center" 
-                          />
-                          <NumberFieldIncrement />
-                        </NumberFieldContent>
-                      </NumberField>
-                    </div>
-                  </transition>
-                </div>
-
                 <!-- Nombre y Descripción -->
                 <div class="grid gap-4 pt-2">
                   <div class="grid gap-2">
@@ -349,44 +292,6 @@ const handleOpenAutoFocus = (e: Event) => {
 
             <!-- Columna Derecha: Configuración Técnica y Fechas -->
             <div class="space-y-8">
-              <!-- Estructura (Movida a la derecha) -->
-              <transition 
-                 enter-active-class="transition duration-300 ease-out" 
-                 enter-from-class="transform translate-x-4 opacity-0" 
-                 enter-to-class="transform translate-x-0 opacity-100"
-              >
-                <div v-if="editForm.mode === 'standard'" class="grid gap-3">
-                   <Label class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                     <Layers class="w-3.5 h-3.5" /> Configuración de Estructura
-                   </Label>
-                   <div class="grid grid-cols-2 gap-1 p-1.5 bg-muted rounded-xl border-2 border-border shadow-inner">
-                     <button 
-                       type="button"
-                       :class="[
-                         'text-[10px] py-2.5 rounded-lg transition-all font-bold uppercase tracking-widest',
-                         !editForm.is_rounds_dynamic ? 'bg-card border border-border shadow-lg' : 'text-muted-foreground hover:text-foreground'
-                       ]"
-                       @click="editForm.is_rounds_dynamic = false"
-                     >
-                       Fija
-                     </button>
-                     <button 
-                       type="button"
-                       :class="[
-                         'text-[10px] py-2.5 rounded-lg transition-all font-bold uppercase tracking-widest',
-                         editForm.is_rounds_dynamic ? 'bg-card border border-border shadow-lg' : 'text-muted-foreground hover:text-foreground'
-                       ]"
-                       @click="editForm.is_rounds_dynamic = true"
-                     >
-                       Dinámica
-                     </button>
-                   </div>
-                   <p class="text-[10px] text-muted-foreground italic px-1">
-                     {{ editForm.is_rounds_dynamic ? 'Las rondas se crean sobre la marcha según la participación.' : 'Define un número exacto de rondas antes de comenzar.' }}
-                   </p>
-                </div>
-              </transition>
-
               <!-- Calendario -->
               <div class="grid gap-3">
                 <Label class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">

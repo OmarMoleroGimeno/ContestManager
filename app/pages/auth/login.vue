@@ -1,10 +1,26 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { Eye, EyeOff, Loader2, Zap } from 'lucide-vue-next'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
+
+const passwordStrength = computed(() => {
+  if (!password.value) return { percent: 0, color: '', text: '' }
+  
+  let score = 0
+  if (password.value.length >= 8) score++
+  if (/[A-Z]/.test(password.value)) score++
+  if (/[a-z]/.test(password.value)) score++
+  if (/\d/.test(password.value)) score++
+  if (/[@$!%*?&]/.test(password.value)) score++
+  
+  if (score <= 2) return { percent: 25, color: 'bg-red-500', text: 'Débil' }
+  if (score <= 3) return { percent: 50, color: 'bg-yellow-500', text: 'Media' }
+  if (score <= 4) return { percent: 75, color: 'bg-blue-500', text: 'Buena' }
+  return { percent: 100, color: 'bg-green-500', text: 'Fuerte' }
+})
 
 definePageMeta({
   layout: 'auth',
@@ -25,15 +41,25 @@ const mode = ref<'login' | 'register'>(
 )
 const email = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 const loading = ref(false)
 const oauthLoading = ref<'google' | 'github' | null>(null)
+const passwordError = ref('')
+const acceptedTerms = ref(false)
+const marketingConsent = ref(false)
 
 const DEMO_USERS = [
   { label: 'Organización Demo', sublabel: 'Dueño · Conservatorio Demo', email: 'org@contestsaas.demo', password: 'Demo1234!' },
   { label: 'Ana García', sublabel: 'Participante · Piano Juvenil', email: 'participante@contestsaas.demo', password: 'Demo1234!' },
   { label: 'Carlos Jurado', sublabel: 'Jurado · Piano Juvenil', email: 'jurado@contestsaas.demo', password: 'Demo1234!' },
 ]
+
+// Clear password error when user starts typing
+watch([password, confirmPassword], () => {
+  if (passwordError.value) passwordError.value = ''
+})
 
 function selectDemoUser(val: string) {
   const found = DEMO_USERS.find(u => u.email === val)
@@ -59,15 +85,47 @@ async function handleLogin() {
 }
 
 async function handleRegister() {
-  if (password.value.length < 6) {
-    toast.error('La contraseña debe tener al menos 6 caracteres.')
+  passwordError.value = ''
+  
+  // Validate terms acceptance
+  if (!acceptedTerms.value) {
+    passwordError.value = 'Debes aceptar los términos y política de privacidad.'
+    toast.error(passwordError.value)
     return
   }
+  
+  // Validate password length (minimum 8 characters)
+  if (password.value.length < 8) {
+    passwordError.value = 'La contraseña debe tener al menos 8 caracteres.'
+    toast.error(passwordError.value)
+    return
+  }
+  
+  // Validate password complexity
+  const hasUppercase = /[A-Z]/.test(password.value)
+  const hasLowercase = /[a-z]/.test(password.value)
+  const hasNumber = /\d/.test(password.value)
+  const hasSymbol = /[@$!%*?&]/.test(password.value)
+  
+  if (!hasUppercase || !hasLowercase || !hasNumber || !hasSymbol) {
+    passwordError.value = 'La contraseña debe incluir mayúscula, minúscula, número y símbolo (@$!%*?&).'
+    toast.error(passwordError.value)
+    return
+  }
+  
+  // Validate passwords match
+  if (password.value !== confirmPassword.value) {
+    passwordError.value = 'Las contraseñas no coinciden.'
+    toast.error(passwordError.value)
+    return
+  }
+  
   loading.value = true
-  const { error, data } = await authStore.signUp(email.value.trim(), password.value)
+  const { error, data } = await authStore.signUp(email.value.trim(), password.value, marketingConsent.value)
   loading.value = false
 
   if (error) {
+    passwordError.value = error.message
     toast.error(
       error.message.includes('already registered')
         ? 'Este correo ya tiene una cuenta. Inicia sesión.'
@@ -191,6 +249,7 @@ async function handleOAuth(provider: 'google' | 'github') {
             :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
             placeholder="••••••••••••"
             class="w-full h-11 pl-3 pr-10 rounded-lg bg-zinc-900/60 border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-white/20 transition"
+            :class="passwordError && mode === 'register' ? 'border-red-500 focus:ring-red-500/20' : ''"
           />
           <button
             type="button"
@@ -201,12 +260,49 @@ async function handleOAuth(provider: 'google' | 'github') {
             <EyeOff v-else class="w-4 h-4" />
           </button>
         </div>
-        <p v-if="mode === 'register'" class="text-xs text-zinc-500">Mínimo 6 caracteres.</p>
+        <div v-if="mode === 'register' && password" class="space-y-2">
+          <div class="h-1 bg-zinc-700 rounded-full overflow-hidden">
+            <div :class="passwordStrength.color" :style="{ width: passwordStrength.percent + '%' }" class="h-full transition-all duration-300" />
+          </div>
+          <p class="text-xs" :class="passwordStrength.color">{{ passwordStrength.text }}</p>
+          <ul class="text-xs text-zinc-500 space-y-1">
+            <li :class="password.length >= 8 ? 'text-green-500' : ''">✓ 8+ caracteres</li>
+            <li :class="/[A-Z]/.test(password) ? 'text-green-500' : ''">✓ Mayúscula</li>
+            <li :class="/[a-z]/.test(password) ? 'text-green-500' : ''">✓ Minúscula</li>
+            <li :class="/\d/.test(password) ? 'text-green-500' : ''">✓ Número</li>
+            <li :class="/[@$!%*?&]/.test(password) ? 'text-green-500' : ''">✓ Símbolo</li>
+          </ul>
+        </div>
+      </div>
+
+      <div v-if="mode === 'register'" class="space-y-1.5">
+        <label for="confirmPassword" class="text-sm text-zinc-300">Confirm Password</label>
+        <div class="relative">
+          <input
+            id="confirmPassword"
+            v-model="confirmPassword"
+            :type="showConfirmPassword ? 'text' : 'password'"
+            required
+            autocomplete="new-password"
+            placeholder="••••••••••••"
+            class="w-full h-11 pl-3 pr-10 rounded-lg bg-zinc-900/60 border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-white/20 transition"
+            :class="passwordError ? 'border-red-500 focus:ring-red-500/20' : ''"
+          />
+          <button
+            type="button"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 transition-colors"
+            @click="showConfirmPassword = !showConfirmPassword"
+          >
+            <Eye v-if="!showConfirmPassword" class="w-4 h-4" />
+            <EyeOff v-else class="w-4 h-4" />
+          </button>
+        </div>
+        <p v-if="passwordError" class="text-xs text-red-400">{{ passwordError }}</p>
       </div>
 
       <button
         type="submit"
-        :disabled="loading || !email || !password"
+        :disabled="loading || !email || !password || (mode === 'register' && !confirmPassword)"
         class="w-full h-11 rounded-lg bg-zinc-100 text-zinc-900 font-semibold text-sm hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
       >
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
@@ -215,10 +311,21 @@ async function handleOAuth(provider: 'google' | 'github') {
           : (mode === 'login' ? 'Log In' : 'Crear cuenta') }}
       </button>
 
-      <p class="text-xs text-zinc-500 text-center">
+      <div v-if="mode === 'register'" class="space-y-3">
+        <label class="flex items-start gap-2 text-xs text-zinc-400 cursor-pointer">
+          <input type="checkbox" v-model="acceptedTerms" required class="mt-0.5 accent-zinc-100" />
+          <span>Acepto los <a href="/terms" class="underline hover:text-zinc-300">Términos de Servicio</a> y la <a href="/privacy" class="underline hover:text-zinc-300">Política de Privacidad</a></span>
+        </label>
+        
+        <label class="flex items-start gap-2 text-xs text-zinc-400 cursor-pointer">
+          <input type="checkbox" v-model="marketingConsent" class="mt-0.5 accent-zinc-100" />
+          <span>Acepto recibir correos sobre actualizaciones y novedades (opcional)</span>
+        </label>
+      </div>
+      <p v-else class="text-xs text-zinc-500 text-center">
         By signing in, you agree to our
-        <a href="#" class="underline hover:text-zinc-300">Terms</a> and
-        <a href="#" class="underline hover:text-zinc-300">Privacy Policy</a>.
+        <a href="/terms" class="underline hover:text-zinc-300">Terms</a> and
+        <a href="/privacy" class="underline hover:text-zinc-300">Privacy Policy</a>.
       </p>
     </form>
 

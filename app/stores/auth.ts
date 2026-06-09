@@ -115,8 +115,31 @@ export const useAuthStore = defineStore('auth', () => {
     return getSupabase().auth.signInWithPassword({ email, password })
   }
 
-  const signUp = async (email: string, password: string) => {
-    return getSupabase().auth.signUp({ email, password })
+  const signUp = async (email: string, password: string, marketingConsent?: boolean) => {
+    const result = await getSupabase().auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          marketing_consent: marketingConsent || false,
+        },
+      },
+    })
+    
+    if (result.data?.user && !result.error) {
+      $fetch('/api/auth/welcome', {
+        method: 'POST',
+        body: {
+          email,
+          first_name: null,
+          marketing_consent: marketingConsent || false,
+        },
+      }).catch((err) => {
+        console.error('[auth] Welcome email failed:', err)
+      })
+    }
+    
+    return result
   }
 
   const signInWithOAuth = async (provider: 'google' | 'github', returnTo = '') => {
@@ -129,11 +152,25 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const signOut = async () => {
-    await getSupabase().auth.signOut()
-    user.value = null
-    session.value = null
-    profile.value = null
-    organization.value = null
+    loading.value = true
+    try {
+      // Unsubscribe auth listener first to prevent duplicate state updates
+      if (authListener) {
+        authListener.subscription.unsubscribe()
+        authListener = null
+      }
+
+      // Sign out from Supabase (this clears localStorage)
+      await getSupabase().auth.signOut()
+
+      // Clear all state after successful sign out
+      session.value = null
+      user.value = null
+      profile.value = null
+      organization.value = null
+    } finally {
+      loading.value = false
+    }
   }
 
   // ─── Profile / Org mutations ──────────────────────────────────────────────
