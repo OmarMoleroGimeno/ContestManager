@@ -1,5 +1,5 @@
 import { defineEventHandler, createError } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const user = requireAuth(event)
@@ -41,8 +41,8 @@ export default defineEventHandler(async (event) => {
       : Promise.resolve({ data: [], error: null }),
   ])
 
-  if (byUserId.error) throw createError({ statusCode: 500, statusMessage: byUserId.error.message })
-  if (byEmail.error) throw createError({ statusCode: 500, statusMessage: byEmail.error.message })
+  if (byUserId.error) throw internalError(event, byUserId.error, 'contest_members.select:by_user_id')
+  if (byEmail.error) throw internalError(event, byEmail.error, 'contest_members.select:by_email')
 
   const judgeEntries = [...(byUserId.data ?? []), ...(byEmail.data ?? [])]
 

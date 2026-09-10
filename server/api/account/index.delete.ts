@@ -1,5 +1,5 @@
 import { defineEventHandler, createError } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 
 // DELETE /api/account
 // Permanently deletes the authenticated user's account.
@@ -52,14 +52,14 @@ export default defineEventHandler(async (event) => {
     // Drop the org first → cascades contests/categories/etc.
     const { error: orgErr } = await admin.from('organizations').delete().eq('id', org.id)
     if (orgErr) {
-      throw createError({ statusCode: 500, statusMessage: `org_delete_failed: ${orgErr.message}` })
+      throw internalError(event, orgErr, 'organizations.delete', 'org_delete_failed')
     }
   }
 
   // Delete auth user → cascades public.profiles (FK ON DELETE CASCADE)
   const { error: delErr } = await admin.auth.admin.deleteUser(user.id)
   if (delErr) {
-    throw createError({ statusCode: 500, statusMessage: `auth_delete_failed: ${delErr.message}` })
+    throw internalError(event, delErr, 'auth.admin.deleteUser', 'auth_delete_failed')
   }
 
   return { success: true }

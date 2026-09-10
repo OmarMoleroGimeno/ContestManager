@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 import { RefundBodySchema } from '~~/server/utils/schemas'
 
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     .select('id, contest_id, stripe_payment_intent_id, amount_paid_cents, amount_refunded_cents, payment_status')
     .eq('id', id)
     .maybeSingle()
-  if (pErr) throw createError({ statusCode: 500, statusMessage: pErr.message })
+  if (pErr) throw internalError(event, pErr, 'participants.select')
   if (!participant) throw createError({ statusCode: 404, statusMessage: 'participant_not_found' })
 
   if (!participant.stripe_payment_intent_id || participant.payment_status !== 'paid') {

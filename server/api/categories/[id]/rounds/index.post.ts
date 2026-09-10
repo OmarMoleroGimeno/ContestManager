@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
+import { RoundCreateSchema } from '~~/server/utils/schemas'
 
 export default defineEventHandler(async (event) => {
   const categoryId = getRouterParam(event, 'id')
@@ -10,7 +11,12 @@ export default defineEventHandler(async (event) => {
   if (!category) throw createError({ statusCode: 404, statusMessage: 'category_not_found' })
   await requireOrgOwnerOrMember(event, category.contest_id)
 
-  const body = await readBody(event)
+  const rawBody = await readBody(event)
+  const parsed = RoundCreateSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid request', data: parsed.error.issues })
+  }
+  const body = parsed.data as Record<string, any>
   const allowed = ['name', 'order', 'scoring_type', 'is_final']
   const roundData: Record<string, any> = { category_id: categoryId }
   for (const key of allowed) {
@@ -25,7 +31,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', categoryId)
       .single()
     if (catErr) {
-      throw createError({ statusCode: 500, statusMessage: catErr.message })
+      throw internalError(event, catErr, 'categories.select')
     }
     const contestStatus = (categoryInfo as any)?.contests?.status
     if (contestStatus !== 'active') {
@@ -39,10 +45,7 @@ export default defineEventHandler(async (event) => {
   const { data, error } = await admin.from('rounds').insert(roundData).select().single()
 
   if (error) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: error.message
-    })
+    throw internalError(event, error, 'rounds.insert')
   }
 
   return data

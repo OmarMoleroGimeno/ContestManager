@@ -1,5 +1,5 @@
-import { defineEventHandler, createError } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { defineEventHandler } from 'h3'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 
 export default defineEventHandler(async (event) => {
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
       .from('organizations')
       .update({ stripe_account_id: accountId })
       .eq('id', org.id)
-    if (upErr) throw createError({ statusCode: 500, statusMessage: upErr.message })
+    if (upErr) throw internalError(event, upErr, 'organizations.update')
   }
 
   const link = await stripe.accountLinks.create({

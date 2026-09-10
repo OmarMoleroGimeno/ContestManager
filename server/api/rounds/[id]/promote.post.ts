@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 import { sendPromotionEmail } from '~~/server/utils/email'
 import { PromoteBodySchema } from '~~/server/utils/schemas'
 
@@ -93,23 +93,26 @@ export default defineEventHandler(async (event) => {
       .select()
       .single()
 
-    if (createErrorMsg) throw createError({ statusCode: 500, statusMessage: createErrorMsg.message })
+    if (createErrorMsg) throw internalError(event, createErrorMsg, 'rounds.insert')
     nextRound = created
   }
 
   // 4. Add participants to next round
+  // `is_qualified` stays NULL: entering a round is not a verdict. It is only set
+  // (true/false) when THIS round is resolved above. Inserting `false` made every
+  // participant of a fresh round read as "Eliminado" before anyone was scored.
   const roundParticipants = body.participantIds.map((pid: string, idx: number) => ({
     round_id: nextRound!.id,
     participant_id: pid,
     order: idx + 1,
-    is_qualified: false
+    is_qualified: null
   }))
 
   const { error: insertError } = await admin
     .from('round_participants')
     .insert(roundParticipants)
 
-  if (insertError) throw createError({ statusCode: 500, statusMessage: insertError.message })
+  if (insertError) throw internalError(event, insertError, 'round_participants.insert')
 
   // Send promotion emails (fire-and-forget)
   const allAffected = [...body.participantIds, ...notPromotedIds]

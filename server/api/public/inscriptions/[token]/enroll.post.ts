@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseUser, serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseUser, serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 import { sendEnrollmentEmail } from '~~/server/utils/email'
 import { EnrollBodySchema } from '~~/server/utils/schemas'
 
@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: m.status, statusMessage: m.message })
       }
     }
-    throw createError({ statusCode: 500, statusMessage: error.message })
+    throw internalError(event, error, 'rpc:enroll_participant')
   }
 
   // Fire-and-forget confirmation email

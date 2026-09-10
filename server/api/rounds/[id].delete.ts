@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const client = serverSupabaseAdmin()
@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     .select('contest_id')
     .eq('id', target.category_id)
     .maybeSingle()
-  if (!cat?.contest_id) throw createError({ statusCode: 500, statusMessage: 'Could not resolve contest' })
+  if (!cat?.contest_id) throw internalError(event, 'round has no resolvable contest', 'rounds.select:contest_resolution')
   await requireOrgOwnerOrMember(event, cat.contest_id)
 
   // Max order in category
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     .select('id, order, status')
     .eq('category_id', target.category_id)
     .order('order', { ascending: false })
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
+  if (sErr) throw internalError(event, sErr, 'rounds.select')
 
   const list = siblings || []
   const maxOrder = list[0]?.order ?? target.order
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
 
   // Delete (FKs cascade: scores, round_participants, etc.)
   const { error: dErr } = await client.from('rounds').delete().eq('id', id)
-  if (dErr) throw createError({ statusCode: 500, statusMessage: dErr.message })
+  if (dErr) throw internalError(event, dErr, 'rounds.delete')
 
   // Previous round becomes active (clear is_final too — user reopening final round)
   // Only if the parent contest is still active
@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
       .from('rounds')
       .update({ status: 'active', closed_at: null, is_final: false })
       .eq('id', prev.id)
-    if (uErr) throw createError({ statusCode: 500, statusMessage: uErr.message })
+    if (uErr) throw internalError(event, uErr, 'rounds.update')
   }
 
   // If deleted round was ranking, reopen category

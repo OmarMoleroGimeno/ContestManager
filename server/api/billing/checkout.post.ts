@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 import { CheckoutPlanSchema } from '~~/server/utils/schemas'
 
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const admin = serverSupabaseAdmin()
 
   const { data: bundles, error: bErr } = await admin.rpc('get_plan_bundles')
-  if (bErr) throw createError({ statusCode: 500, statusMessage: bErr.message })
+  if (bErr) throw internalError(event, bErr, 'rpc:get_plan_bundles')
   const bundle = (bundles as any[]).find((b) => b.plan === plan)
   if (!bundle) throw createError({ statusCode: 400, statusMessage: 'unknown_plan' })
 

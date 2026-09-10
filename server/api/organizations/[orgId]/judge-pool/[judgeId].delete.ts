@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const { org } = await requireOrgOwner(event)
@@ -22,12 +22,10 @@ export default defineEventHandler(async (event) => {
     .from('judge_pool_members')
     .delete()
     .eq('id', judgeId)
+    .eq('organization_id', org.id)
 
   if (error) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: error.message
-    })
+    throw internalError(event, error, 'judge_pool_members.delete')
   }
 
   return { success: true }

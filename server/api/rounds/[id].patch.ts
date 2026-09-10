@@ -1,11 +1,16 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
+import { RoundPatchSchema } from '~~/server/utils/schemas'
 import { sendRankingPublishedEmail } from '~~/server/utils/email'
 
 export default defineEventHandler(async (event) => {
   const admin = serverSupabaseAdmin()
   const id = getRouterParam(event, 'id')
-  const body = await readBody(event)
+  const parsed = RoundPatchSchema.safeParse(await readBody(event))
+  if (!parsed.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid request', data: parsed.error.issues })
+  }
+  const body = parsed.data as Record<string, any>
 
   if (!id) throw createError({ statusCode: 400, statusMessage: 'Missing ID' })
 
@@ -33,7 +38,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', roundInfo.category_id)
       .single()
     if (contestErr) {
-      throw createError({ statusCode: 500, statusMessage: contestErr.message })
+      throw internalError(event, contestErr, 'categories.select')
     }
     const contestStatus = (contestInfo as any)?.contests?.status
     if (contestStatus !== 'active') {
@@ -47,9 +52,24 @@ export default defineEventHandler(async (event) => {
   // Read current state before update to detect is_published transition
   const { data: prev } = await admin
     .from('rounds')
-    .select('is_published, is_ranking, category_id')
+    .select('is_published, is_ranking, category_id, status')
     .eq('id', id)
     .single()
+
+  // A closed round is locked: it cannot be reopened nor edited.
+  // The one exception is `is_published` on its own, because the final ranking
+  // is a permanently-closed pseudo-round and publishing/unpublishing it is a
+  // legitimate action on an already-closed round.
+  if (prev?.status === 'closed') {
+    const touched = Object.keys(body)
+    const onlyPublishToggle = touched.length > 0 && touched.every((k) => k === 'is_published')
+    if (!onlyPublishToggle) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'La ronda está cerrada y no se puede modificar.',
+      })
+    }
+  }
 
   const allowed = ['name', 'order', 'status', 'scoring_type', 'max_score', 'next_round_id', 'is_final', 'is_ranking', 'is_published', 'started_at', 'closed_at']
   const updates: Record<string, any> = {}

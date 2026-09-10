@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const client = serverSupabaseAdmin()
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   if (roundError || !roundData) throw createError({ statusCode: 404, statusMessage: 'Round not found' })
   const categories = Array.isArray(roundData.categories) ? roundData.categories[0] : roundData.categories
   const contestId = (categories as { contest_id: string } | null | undefined)?.contest_id
-  if (!contestId) throw createError({ statusCode: 500, statusMessage: 'Could not resolve contest ID' })
+  if (!contestId) throw internalError(event, 'round has no resolvable contest', 'rounds.select:contest_resolution')
 
   // Auth gate — require org owner or contest member
   await requireOrgOwnerOrMember(event, contestId)
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const { data: allMembers, error: judgesError } = await client
     .rpc('get_contest_members_with_avatar', { p_contest_id: contestId })
 
-  if (judgesError) throw createError({ statusCode: 500, statusMessage: judgesError.message })
+  if (judgesError) throw internalError(event, judgesError, 'rpc:get_contest_members_with_avatar')
 
   const judges = ((allMembers ?? []) as Array<{
     id: string; user_id: string | null; full_name: string | null
@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
       .eq('round_id', roundId),
   ])
 
-  if (scoresError) throw createError({ statusCode: 500, statusMessage: scoresError.message })
+  if (scoresError) throw internalError(event, scoresError, 'scores.select')
 
   const overrideMap: Record<string, { final_score_override: number | null; final_score_override_by: string | null; final_score_override_at: string | null; final_score_override_notes: string | null }> = {}
   for (const rp of roundParticipants ?? []) {

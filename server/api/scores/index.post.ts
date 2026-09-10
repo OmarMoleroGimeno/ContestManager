@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, readBody } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 import { ScoreBodySchema } from '~~/server/utils/schemas'
 
 export default defineEventHandler(async (event) => {
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const { round_id, participant_id, judge_id, value, notes, promote } = parsed.data
 
   // Auth gate: if judge_id doesn't match the authenticated user,
-  // require org owner of the contest (admin override)
+  // require org owner or accepted contest member of the contest (admin override)
   let isAdminAction = false
   if (judge_id !== user.id) {
     const { data: round } = await client
@@ -32,23 +32,7 @@ export default defineEventHandler(async (event) => {
     if (!category) {
       throw createError({ statusCode: 404, statusMessage: 'category_not_found' })
     }
-    const { data: contest } = await client
-      .from('contests')
-      .select('organization_id')
-      .eq('id', category.contest_id)
-      .maybeSingle()
-    if (!contest) {
-      throw createError({ statusCode: 404, statusMessage: 'contest_not_found' })
-    }
-    const { data: org } = await client
-      .from('organizations')
-      .select('id')
-      .eq('id', contest.organization_id)
-      .eq('owner_id', user.id)
-      .maybeSingle()
-    if (!org) {
-      throw createError({ statusCode: 403, statusMessage: 'forbidden' })
-    }
+    await requireOrgOwnerOrMember(event, category.contest_id)
     isAdminAction = true
   }
 
@@ -88,7 +72,7 @@ export default defineEventHandler(async (event) => {
   // Write audit log only if the value actually changed (prevents duplicates on retry)
   const newValueNum = Number(value)
   if (oldValue === null || oldValue !== newValueNum) {
-    await client.from('score_audit_logs').insert({
+    const { error: auditError } = await client.from('score_audit_logs').insert({
       round_id,
       participant_id,
       judge_id,
@@ -100,6 +84,9 @@ export default defineEventHandler(async (event) => {
       notes: notes ?? null,
       is_admin_action: isAdminAction,
     })
+    if (auditError) {
+      throw internalError(event, auditError, 'score_audit_logs.insert', 'audit_log_failed')
+    }
   }
 
   return data

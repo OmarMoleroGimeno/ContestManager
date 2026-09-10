@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const client = serverSupabaseAdmin()
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     .select('id, name, order, is_ranking, is_final')
     .eq('category_id', categoryId)
     .order('order', { ascending: true })
-  if (rErr) throw createError({ statusCode: 500, statusMessage: rErr.message })
+  if (rErr) throw internalError(event, rErr, 'rounds.select')
   const rows = (rounds || []).filter(r => !r.is_ranking)
 
   const roundIds = rows.map(r => r.id)
@@ -34,14 +34,14 @@ export default defineEventHandler(async (event) => {
     .select('id, round_id, value, judge_id, created_at')
     .eq('participant_id', participantId)
     .in('round_id', roundIds)
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
+  if (sErr) throw internalError(event, sErr, 'scores.select')
 
   const { data: rps, error: rpErr } = await client
     .from('round_participants')
     .select('round_id, final_score_override, is_qualified')
     .eq('participant_id', participantId)
     .in('round_id', roundIds)
-  if (rpErr) throw createError({ statusCode: 500, statusMessage: rpErr.message })
+  if (rpErr) throw internalError(event, rpErr, 'round_participants.select')
 
   const judgeIds = Array.from(new Set((scores || []).map(s => s.judge_id).filter(Boolean)))
   let judgeMap: Record<string, string> = {}
