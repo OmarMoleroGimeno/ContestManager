@@ -2,6 +2,11 @@ import { defineEventHandler, getHeader, readRawBody, createError, setResponseSta
 import { serverSupabaseAdmin } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 import {
+  claimStripeEvent,
+  releaseStripeEvent,
+  wasStripeEventProcessed,
+} from '~~/server/utils/stripe-idempotency'
+import {
   handleBundle,
   handleTicketsTopup,
   handleActivationsTopup,
@@ -29,13 +34,17 @@ export default defineEventHandler(async (event) => {
 
   // Idempotency: guard against duplicate event processing
   const admin = serverSupabaseAdmin()
-  const { data: existingEvent } = await admin
-    .from('processed_stripe_events')
-    .select('stripe_event_id')
-    .eq('stripe_event_id', evt.id)
-    .maybeSingle()
+  let alreadyProcessed: boolean
+  try {
+    alreadyProcessed = await wasStripeEventProcessed(admin, evt.id)
+  } catch (e: any) {
+    // Fail loudly: an unreadable ledger must not be mistaken for an empty one,
+    // or every retry re-runs the handler and re-credits balances.
+    console.error('[stripe webhook] idempotency lookup failed:', e?.message)
+    throw createError({ statusCode: 500, statusMessage: 'idempotency_lookup_failed' })
+  }
 
-  if (existingEvent) {
+  if (alreadyProcessed) {
     setResponseStatus(event, 200)
     return { received: true, ignored: 'already_processed' }
   }
@@ -88,22 +97,22 @@ export default defineEventHandler(async (event) => {
   }
 
   // ─── Atomic idempotency: mark event as processing BEFORE handler ───────────
-  // If insert succeeds, we own this event. If handler fails, we delete the row
-  // so Stripe can retry. If insert fails with 23505, event already processed.
-  let eventMarked = false
+  // The insert is the lock: if it succeeds we own this event, and a concurrent
+  // delivery loses the race with 23505. If the handler fails we release the
+  // claim so Stripe can retry.
+  // Note: the branches above return before reaching this point, so only
+  // checkout.session.completed is covered by the atomic lock (see KAN-51).
+  let claim: Awaited<ReturnType<typeof claimStripeEvent>>
   try {
-    await admin.from('processed_stripe_events').insert({
-      stripe_event_id: evt.id,
-      event_type: evt.type,
-    })
-    eventMarked = true
+    claim = await claimStripeEvent(admin, evt.id, evt.type)
   } catch (e: any) {
-    if (e?.code === '23505') {
-      setResponseStatus(event, 200)
-      return { received: true, ignored: 'already_processed' }
-    }
     console.error('[stripe webhook] failed to mark event processing:', e?.message)
     throw createError({ statusCode: 500, statusMessage: 'idempotency_lock_failed' })
+  }
+
+  if (claim === 'already_processed') {
+    setResponseStatus(event, 200)
+    return { received: true, ignored: 'already_processed' }
   }
 
   let handlerResult: Record<string, any> = { received: true }
@@ -126,10 +135,7 @@ export default defineEventHandler(async (event) => {
     } catch (err: any) {
       console.error('[stripe webhook] handler failed:', err?.message)
       // Rollback idempotency lock so Stripe can retry
-      if (eventMarked) {
-        await admin.from('processed_stripe_events').delete().eq('stripe_event_id', evt.id)
-          .catch((delErr: any) => console.error('[stripe webhook] rollback failed:', delErr?.message))
-      }
+      await releaseStripeEvent(admin, evt.id)
       throw createError({ statusCode: 500, statusMessage: 'handler_failed' })
     }
   }
