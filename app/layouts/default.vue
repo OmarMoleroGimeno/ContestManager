@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Toaster } from '@/components/ui/sonner'
-import CommandPalette from '@/components/ui/CommandPalette.vue'
+import CommandPalette from '@/components/common/CommandPalette.vue'
 import { Search, Sun, Moon } from 'lucide-vue-next'
 import {
   SidebarProvider,
@@ -212,6 +212,7 @@ const isMac = computed(() => typeof navigator !== 'undefined' && /Mac/i.test(nav
               <span>{{ ticketBalance }}</span>
               <span class="text-muted-foreground font-normal">tickets</span>
             </NuxtLink>
+            <NotificationsPopover />
             <button
               @click="toggleColorMode"
               class="flex items-center justify-center w-9 h-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -220,7 +221,6 @@ const isMac = computed(() => typeof navigator !== 'undefined' && /Mac/i.test(nav
               <Sun v-if="colorMode.value === 'dark'" class="w-4 h-4" />
               <Moon v-else class="w-4 h-4" />
             </button>
-            <NotificationsPopover />
             <template #fallback>
               <div class="w-9 h-9" />
             </template>

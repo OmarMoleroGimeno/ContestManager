@@ -282,7 +282,7 @@ async function handleSubmit() {
       toast.success('¡Organización creada!')
     }
     
-    await navigateTo(returnTo.value || '/dashboard')
+    await navigateTo(returnTo.value || authStore.homePath)
   } catch (error: any) {
     console.error('Onboarding error:', error)
     toast.error(error?.message || 'Error al guardar. Intenta de nuevo.')

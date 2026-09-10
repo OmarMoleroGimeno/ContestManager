@@ -5,6 +5,12 @@ import {
   CheckoutPlanSchema,
   CheckoutTicketsSchema,
   CheckoutActivationsSchema,
+  RoundPatchSchema,
+  RoundCreateSchema,
+  CategoryCreateSchema,
+  RoundParticipantPatchSchema,
+  ScoreOverrideSchema,
+  FormSchemaBodySchema,
 } from './schemas'
 
 const UUID_A = '550e8400-e29b-41d4-a716-446655440000'
@@ -105,5 +111,66 @@ describe('CheckoutActivationsSchema', () => {
   })
   it('rejects over 50', () => {
     expect(CheckoutActivationsSchema.safeParse({ quantity: 51 }).success).toBe(false)
+  })
+})
+
+// Payloads copied verbatim from the frontend call sites.
+describe('new schemas accept real frontend payloads', () => {
+  it('round PATCH bodies', () => {
+    for (const b of [
+      { is_final: true },
+      { is_final: false, status: 'active', closed_at: null },
+      { is_published: true },
+      { status: 'closed', is_final: true, closed_at: new Date().toISOString() },
+      { status: 'active', started_at: new Date().toISOString() },
+    ]) expect(RoundPatchSchema.safeParse(b).success, JSON.stringify(b)).toBe(true)
+  })
+
+  it('round PATCH rejects a bogus status', () => {
+    expect(RoundPatchSchema.safeParse({ status: 'bogus' }).success).toBe(false)
+  })
+
+  it('round create bodies', () => {
+    for (const b of [
+      { name: 'Ranking', order: 3, status: 'closed', scoring_type: 'numeric', is_ranking: true },
+      { name: 'Semifinal', order: 2, status: 'active', scoring_type: 'numeric' },
+    ]) expect(RoundCreateSchema.safeParse(b).success, JSON.stringify(b)).toBe(true)
+  })
+
+  it('category create body from the wizard', () => {
+    expect(CategoryCreateSchema.safeParse({
+      name: 'Piano Juvenil', min_age: 12, max_age: 18,
+      max_participants: 20, entry_fee_cents: 2500,
+    }).success).toBe(true)
+  })
+
+  it('round-participant PATCH: ensayos + actuaciones drafts', () => {
+    expect(RoundParticipantPatchSchema.safeParse({
+      rehearsal_room: '', rehearsal_time: '', rehearsal_accompanist: '',
+    }).success).toBe(true)
+    expect(RoundParticipantPatchSchema.safeParse({
+      rehearsal_room: 'Sala 2', rehearsal_time: '2026-04-20T10:00', rehearsal_accompanist: 'Ana',
+    }).success).toBe(true)
+    expect(RoundParticipantPatchSchema.safeParse({ performance_time: '2026-04-20T18:30' }).success).toBe(true)
+  })
+
+  it('score override: set, clear, and reject garbage', () => {
+    expect(ScoreOverrideSchema.safeParse({
+      final_score_override: 9.5, final_score_override_notes: 'ajuste',
+      admin_user_id: 'u1', admin_user_name: 'Org',
+    }).success).toBe(true)
+    expect(ScoreOverrideSchema.safeParse({
+      final_score_override: null, final_score_override_notes: null,
+    }).success).toBe(true)
+    // the NaN bug this schema exists to stop
+    expect(ScoreOverrideSchema.safeParse({ final_score_override: 'abc' }).success).toBe(false)
+    expect(ScoreOverrideSchema.safeParse({ final_score_override: Number('abc') }).success).toBe(false)
+  })
+
+  it('form schema body', () => {
+    expect(FormSchemaBodySchema.safeParse({
+      fields: [{ key: 'instrument', label: 'Instrumento', type: 'text', required: true, extra: 'kept' }],
+    }).success).toBe(true)
+    expect(FormSchemaBodySchema.safeParse({ fields: 'nope' }).success).toBe(false)
   })
 })

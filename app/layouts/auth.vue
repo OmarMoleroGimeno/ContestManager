@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Toaster } from '@/components/ui/sonner'
-import Grainient from '@/components/ui/Grainient.vue'
+import Grainient from '@/components/common/Grainient.vue'
 </script>
 
 <template>

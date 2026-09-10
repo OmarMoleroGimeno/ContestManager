@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
 import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { ScoreOverrideSchema } from '~~/server/utils/schemas'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -31,8 +32,11 @@ export default defineEventHandler(async (event) => {
   await requireOrgOwnerOrMember(event, category.contest_id)
 
   const user = event.context.user as { id: string; email?: string } | undefined
-  const body = await readBody(event)
-  const { final_score_override, final_score_override_notes } = body
+  const parsed = ScoreOverrideSchema.safeParse(await readBody(event))
+  if (!parsed.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid request', data: parsed.error.issues })
+  }
+  const { final_score_override, final_score_override_notes } = parsed.data
 
   // Read existing for audit
   const { data: existing } = await admin

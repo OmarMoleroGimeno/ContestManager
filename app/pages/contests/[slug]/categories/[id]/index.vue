@@ -37,7 +37,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { DatePicker } from '@/components/ui/date-picker'
-import MotionButton from '@/components/ui/MotionButton.vue'
+import MotionButton from '@/components/common/MotionButton.vue'
 import type { DateValue } from '@internationalized/date'
 import { useContestStore } from '@/stores/contest'
 import { useContestMembersStore } from '@/stores/contest-members'

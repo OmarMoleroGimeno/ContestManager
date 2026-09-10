@@ -10,12 +10,13 @@ export default defineEventHandler(async (event) => {
   // Block edit if parent contest is active or terminal
   const { data: row } = await admin
     .from('participants')
-    .select('contests:contest_id(status)')
+    .select('contest_id, contests:contest_id(status)')
     .eq('id', id)
     .single() as any
 
   // Auth gate — require org owner or contest member
-  await requireOrgOwnerOrMember(event, (row as any)?.contests?.contest_id || '')
+  if (!row?.contest_id) throw createError({ statusCode: 404, statusMessage: 'participant_not_found' })
+  await requireOrgOwnerOrMember(event, row.contest_id)
 
   const status = row?.contests?.status
   if (status && ['active','finished','cancelled'].includes(status)) {

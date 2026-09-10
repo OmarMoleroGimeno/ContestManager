@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Directive } from 'vue'
 import { ArrowRight, BarChart3, CheckCircle2, Play, ShieldCheck, Sparkles, Trophy, Users2, Workflow } from 'lucide-vue-next'
-import Grainient from '@/components/ui/Grainient.vue'
+import Grainient from '@/components/common/Grainient.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -71,8 +71,8 @@ const proofPoints = [
   'Interacciones suaves que elevan la percepcion del producto sin distraer.',
 ]
 
-const ctaHref = computed(() => authStore.isAuthenticated ? '/dashboard' : '/auth/login?mode=register')
-const ctaLabel = computed(() => authStore.isAuthenticated ? 'Abrir dashboard' : 'Crear cuenta')
+const ctaHref = computed(() => authStore.isAuthenticated ? authStore.homePath : '/auth/login?mode=register')
+const ctaLabel = computed(() => authStore.isAuthenticated ? 'Abrir la app' : 'Crear cuenta')
 
 const heroPointer = ref({ x: 0, y: 0, active: false })
 const heroCardStyle = computed(() => {

@@ -46,6 +46,25 @@ export default defineNuxtConfig({
       appVersion: process.env.APP_VERSION || '',
     }
   },
+  vite: {
+    // Pre-bundle these so Vite doesn't discover them at runtime and reload the page.
+    optimizeDeps: {
+      include: [
+        '@supabase/supabase-js',
+        'lucide-vue-next',
+        'class-variance-authority',
+        'ogl',
+        'reka-ui',
+        'clsx',
+        'tailwind-merge',
+        '@vueuse/core',
+        'vue-sonner',
+        '@tanstack/vue-table',
+        'jspdf',
+        '@internationalized/date',
+      ],
+    },
+  },
   nitro: {
     routeRules: {
       '/api/stripe/webhook': { cors: false },

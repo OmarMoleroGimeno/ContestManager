@@ -142,8 +142,10 @@ function roundStatusClass(status: string) {
                       <MapPin class="w-3.5 h-3.5" />
                       <span>{{ round.my_slot.location }}</span>
                     </div>
+                    <!-- Only once the round is resolved: before that `is_qualified`
+                         is not a verdict and would falsely read "Eliminado". -->
                     <Badge
-                      v-if="round.my_slot.is_qualified !== null"
+                      v-if="round.status === 'closed' && round.my_slot.is_qualified !== null"
                       class="text-[10px] font-bold border-2"
                       :class="round.my_slot.is_qualified ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800'"
                     >

@@ -25,6 +25,12 @@ export const useAuthStore = defineStore('auth', () => {
   const displayName = computed(
     () => profile.value?.full_name || user.value?.email || 'Usuario'
   )
+  /**
+   * Landing page after signing in. "Mis Concursos" for both roles, but they are
+   * two different pages: organizers manage contests at /contests, everyone else
+   * sees the ones they take part in at /my-contests.
+   */
+  const homePath = computed(() => (isOrgOwner.value ? '/contests' : '/my-contests'))
   const initials = computed(() =>
     displayName.value
       .split(' ')
@@ -124,7 +130,6 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const signUp = async (email: string, password: string, marketingConsent?: boolean) => {
-    console.log('[auth] signUp called with:', email)
     const result = await getSupabase().auth.signUp({ 
       email, 
       password,
@@ -135,20 +140,13 @@ export const useAuthStore = defineStore('auth', () => {
       },
     })
     
-    console.log('[auth] signUp result:', { 
-      hasUser: !!result.data?.user, 
-      hasError: !!result.error,
-      userId: result.data?.user?.id 
-    })
-    
     if (result.data?.user && !result.error) {
-      console.log('[auth] Calling welcome email endpoint...')
       try {
         const token = result.data.session?.access_token
         if (!token) {
           console.warn('[auth] No session token after signup — skipping welcome email (email confirmation may be required)')
         } else {
-          const welcomeResult = await $fetch('/api/auth/welcome', {
+          await $fetch('/api/auth/welcome', {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: {
@@ -157,7 +155,6 @@ export const useAuthStore = defineStore('auth', () => {
               marketing_consent: marketingConsent || false,
             },
           })
-          console.log('[auth] Welcome email endpoint response:', welcomeResult)
         }
       } catch (err) {
         console.error('[auth] Welcome email failed:', err)
@@ -245,6 +242,7 @@ export const useAuthStore = defineStore('auth', () => {
     needsOnboarding,
     needsOrgSetup,
     displayName,
+    homePath,
     initials,
     init,
     signIn,

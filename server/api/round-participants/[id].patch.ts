@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
 import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { RoundParticipantPatchSchema } from '~~/server/utils/schemas'
 import { sendScheduleEmail } from '~~/server/utils/email'
 
 export default defineEventHandler(async (event) => {
@@ -31,7 +32,12 @@ export default defineEventHandler(async (event) => {
   if (!category) throw createError({ statusCode: 404, statusMessage: 'category_not_found' })
   await requireOrgOwnerOrMember(event, category.contest_id)
 
-  const body = await readBody(event)
+  const rawBody = await readBody(event)
+  const parsed = RoundParticipantPatchSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid request', data: parsed.error.issues })
+  }
+  const body = parsed.data as Record<string, any>
   const allowed = ['rehearsal_room', 'rehearsal_time', 'rehearsal_accompanist', 'performance_time']
   const updates: Record<string, string | null> = {}
   for (const key of allowed) {

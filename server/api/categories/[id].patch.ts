@@ -9,11 +9,20 @@ export default defineEventHandler(async (event) => {
   const admin = serverSupabaseAdmin()
   const { data: category } = await admin
     .from('categories')
-    .select('contest_id')
+    .select('contest_id, status')
     .eq('id', id)
     .maybeSingle()
   if (!category) throw createError({ statusCode: 404, statusMessage: 'category_not_found' })
   await requireOrgOwnerOrMember(event, category.contest_id)
+
+  // A closed category is locked: it cannot be reopened nor edited. Closing one
+  // is still allowed — this only applies once it is already closed.
+  if (category.status === 'closed') {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'La categoría está cerrada y no se puede modificar.',
+    })
+  }
 
   const rawBody = await readBody(event)
   const parsed = CategoryPatchSchema.safeParse(rawBody)

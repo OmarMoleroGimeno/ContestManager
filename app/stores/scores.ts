@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { apiClient } from '~/api/apiClient'
 
 export const useScoresStore = defineStore('scores', () => {
   const summaries = ref<Record<string, any>>({})
@@ -11,14 +12,14 @@ export const useScoresStore = defineStore('scores', () => {
 
   async function fetchSummary(roundId: string): Promise<any> {
     if (fetchedRounds.value.has(roundId)) return summaries.value[roundId]
-    const data = await ($fetch as any)(`/api/rounds/${roundId}/scores/summary`) as any
+    const data = await (apiClient as any)(`/api/rounds/${roundId}/scores/summary`) as any
     summaries.value[roundId] = data
     fetchedRounds.value.add(roundId)
     return summaries.value[roundId]
   }
 
   async function upsertScore(payload: { round_id: string; participant_id: string; judge_id: string; value: number; notes?: string; promote?: boolean }): Promise<any> {
-    const data = await ($fetch as any)('/api/scores', { method: 'POST', body: payload }) as any
+    const data = await (apiClient as any)('/api/scores', { method: 'POST', body: payload }) as any
     invalidateSummary(payload.round_id)
     return data
   }

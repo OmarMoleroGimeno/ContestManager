@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import { storeToRefs } from 'pinia'
-import { ArrowLeft, Search, Link2, Check, Users, Trash2, Mail, Phone, MapPin, Calendar, Lock, Unlock, Download, Upload } from 'lucide-vue-next'
+import { ArrowLeft, Search, Link2, Check, Users, Trash2, Mail, Phone, MapPin, Calendar, Lock, Unlock, Download, Upload, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table'
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from '@/components/ui/select'
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle, AlertDialogTrigger,
@@ -17,6 +20,7 @@ import {
 import { useContestStore } from '@/stores/contest'
 import { useParticipantsStore } from '@/stores/participants'
 import ImportCsvDialog from '@/components/contest/ImportCsvDialog.vue'
+import { apiClient } from '@/api/apiClient'
 
 const route = useRoute()
 const contestStore = useContestStore()
@@ -77,9 +81,14 @@ async function onImported(count: number) {
   fetchTicketBalance()
 }
 
-// ── Filters ──────────────────────────────────────────────────────────────────
+// ── Filters & Pagination ─────────────────────────────────────────────────────
 const searchQuery = ref('')
 const categoryFilter = ref<string>('all')
+const paymentFilter = ref<string>('all')
+const sortOrder = ref<'newest' | 'oldest' | 'name-asc' | 'name-desc'>('newest')
+
+const currentPage = ref(1)
+const pageSize = ref(10)
 
 const categoryById = computed(() => {
   const m: Record<string, any> = {}
@@ -87,22 +96,109 @@ const categoryById = computed(() => {
   return m
 })
 
-const sortedInscriptions = computed(() => {
-  const list = (participants.value ?? []).slice()
-  list.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  return list
-})
-
 const filteredInscriptions = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
-  return sortedInscriptions.value.filter((p: any) => {
+  const list = (participants.value ?? []).slice()
+
+  // Apply filters
+  const filtered = list.filter((p: any) => {
     if (categoryFilter.value !== 'all' && p.category_id !== categoryFilter.value) return false
+    
+    if (paymentFilter.value !== 'all') {
+      if (paymentFilter.value === 'paid' && p.payment_status !== 'paid') return false
+      if (paymentFilter.value === 'refunded' && p.payment_status !== 'refunded') return false
+      if (paymentFilter.value === 'partial_refund' && p.payment_status !== 'partial_refund') return false
+      if (paymentFilter.value === 'free' && p.payment_status !== 'free' && p.payment_status !== 'zero') return false
+    }
+
     if (!q) return true
     const hay = [p.name, p.first_name, p.last_name, p.email, p.dni, p.phone, p.country]
       .filter(Boolean)
       .map((s: string) => s.toLowerCase())
     return hay.some(h => h.includes(q))
   })
+
+  // Apply sorting
+  if (sortOrder.value === 'newest') {
+    filtered.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  } else if (sortOrder.value === 'oldest') {
+    filtered.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  } else if (sortOrder.value === 'name-asc') {
+    filtered.sort((a: any, b: any) => {
+      const nameA = (a.name || `${a.first_name ?? ''} ${a.last_name ?? ''}`).trim().toLowerCase()
+      const nameB = (b.name || `${b.first_name ?? ''} ${b.last_name ?? ''}`).trim().toLowerCase()
+      return nameA.localeCompare(nameB)
+    })
+  } else if (sortOrder.value === 'name-desc') {
+    filtered.sort((a: any, b: any) => {
+      const nameA = (a.name || `${a.first_name ?? ''} ${a.last_name ?? ''}`).trim().toLowerCase()
+      const nameB = (b.name || `${b.first_name ?? ''} ${b.last_name ?? ''}`).trim().toLowerCase()
+      return nameB.localeCompare(nameA)
+    })
+  }
+
+  return filtered
+})
+
+const isFiltersDirty = computed(() => {
+  return searchQuery.value !== '' ||
+         categoryFilter.value !== 'all' ||
+         paymentFilter.value !== 'all' ||
+         sortOrder.value !== 'newest'
+})
+
+function resetFilters() {
+  searchQuery.value = ''
+  categoryFilter.value = 'all'
+  paymentFilter.value = 'all'
+  sortOrder.value = 'newest'
+  currentPage.value = 1
+}
+
+const totalPages = computed(() => Math.ceil(filteredInscriptions.value.length / pageSize.value))
+
+const paginatedInscriptions = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredInscriptions.value.slice(start, end)
+})
+
+const pageRange = computed(() => {
+  const current = currentPage.value
+  const total = totalPages.value
+  const maxButtons = 5
+  
+  if (total <= maxButtons) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  
+  const half = Math.floor(maxButtons / 2)
+  let start = current - half
+  let end = current + half
+  
+  if (start <= 0) {
+    start = 1
+    end = maxButtons
+  } else if (end > total) {
+    end = total
+    start = total - maxButtons + 1
+  }
+  
+  return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+})
+
+const paginationStart = computed(() => {
+  if (filteredInscriptions.value.length === 0) return 0
+  return (currentPage.value - 1) * pageSize.value + 1
+})
+
+const paginationEnd = computed(() => {
+  return Math.min(currentPage.value * pageSize.value, filteredInscriptions.value.length)
+})
+
+// Reset to page 1 on filter/search change
+watch([searchQuery, categoryFilter, paymentFilter, pageSize], () => {
+  currentPage.value = 1
 })
 
 // Stats
@@ -164,7 +260,7 @@ const refunding = ref<string | null>(null)
 async function refundParticipant(id: string) {
   refunding.value = id
   try {
-    const r = await $fetch<any>(`/api/participants/${id}/refund`, { method: 'POST', body: {} })
+    const r = await apiClient<any>(`/api/participants/${id}/refund`, { method: 'POST', body: {} })
     toast.success(r?.status === 'refunded' ? 'Reembolso completado' : 'Reembolso parcial completado')
     // Refresh participants
     const cid = currentContest.value?.id
@@ -338,12 +434,53 @@ const contestLocked = computed(() => ['active','finished','cancelled'].includes(
     </div>
 
     <!-- Filter bar -->
-    <div class="flex flex-wrap items-center gap-3">
-      <div class="relative flex-1 min-w-[240px] max-w-sm">
-        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        <Input v-model="searchQuery" placeholder="Buscar nombre, email, DNI…" class="pl-9 h-10 border-2" />
+    <div class="flex flex-col gap-4 bg-muted/20 border-2 border-border p-4 rounded-xl shadow-sm">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+          <div class="relative w-full max-w-xs">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Input v-model="searchQuery" placeholder="Buscar nombre, email, DNI…" class="pl-9 h-10 border-2 bg-background" />
+          </div>
+          
+          <Select v-model="paymentFilter">
+            <SelectTrigger class="h-10 w-[185px] border-2 bg-background font-bold text-xs uppercase tracking-wider">
+              <SelectValue placeholder="Estado de pago" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los pagos</SelectItem>
+              <SelectItem value="paid">Pagados</SelectItem>
+              <SelectItem value="free">Gratis / Exentos</SelectItem>
+              <SelectItem value="refunded">Reembolsados</SelectItem>
+              <SelectItem value="partial_refund">Reembolso parcial</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select v-model="sortOrder">
+            <SelectTrigger class="h-10 w-[185px] border-2 bg-background font-bold text-xs uppercase tracking-wider">
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Más recientes</SelectItem>
+              <SelectItem value="oldest">Más antiguos</SelectItem>
+              <SelectItem value="name-asc">Nombre (A-Z)</SelectItem>
+              <SelectItem value="name-desc">Nombre (Z-A)</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button 
+            v-if="isFiltersDirty" 
+            variant="ghost" 
+            size="sm" 
+            class="h-10 gap-1.5 font-bold uppercase tracking-widest text-[10px] text-zinc-500 hover:text-foreground"
+            @click="resetFilters"
+          >
+            <RotateCcw class="w-3.5 h-3.5" /> Limpiar filtros
+          </Button>
+        </div>
       </div>
-      <div class="flex flex-wrap gap-1.5">
+
+      <!-- Categories Filter Row -->
+      <div class="flex flex-wrap gap-1.5 border-t border-border/50 pt-3">
         <button
           type="button"
           class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-md border-2 transition-all flex items-center gap-1.5"
@@ -373,141 +510,210 @@ const contestLocked = computed(() => ['active','finished','cancelled'].includes(
     </div>
 
     <!-- Table -->
-    <div v-if="filteredInscriptions.length" class="border-2 border-border rounded-xl overflow-hidden bg-card">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fecha</TableHead>
-            <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Participante</TableHead>
-            <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Categoría</TableHead>
-            <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Contacto</TableHead>
-            <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Documento</TableHead>
-            <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Pago</TableHead>
-            <TableHead class="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          <TableRow v-for="p in filteredInscriptions" :key="p.id" class="group hover:bg-muted/40">
-            <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
-              <div class="flex items-center gap-1.5">
-                <Calendar class="w-3 h-3" />
-                {{ fmtDate(p.created_at) }}
-              </div>
-            </TableCell>
-            <TableCell>
-              <div class="flex flex-col">
-                <span class="font-bold text-sm">{{ p.name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() }}</span>
-                <span v-if="p.birthdate" class="text-[10px] text-muted-foreground">
-                  Nac. {{ new Date(p.birthdate).toLocaleDateString('es-ES') }}
-                </span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge class="font-bold uppercase text-[9px] tracking-widest border-2 rounded-md bg-muted text-foreground border-border">
-                {{ categoryById[p.category_id]?.name ?? '—' }}
-              </Badge>
-            </TableCell>
-            <TableCell>
-              <div class="flex flex-col gap-0.5 text-xs">
-                <span v-if="p.email" class="flex items-center gap-1.5 text-muted-foreground">
-                  <Mail class="w-3 h-3" /> {{ p.email }}
-                </span>
-                <span v-if="p.phone" class="flex items-center gap-1.5 text-muted-foreground">
-                  <Phone class="w-3 h-3" /> {{ p.phone }}
-                </span>
-                <span v-if="p.country" class="flex items-center gap-1.5 text-muted-foreground">
-                  <MapPin class="w-3 h-3" /> {{ p.country }}
-                </span>
-              </div>
-            </TableCell>
-            <TableCell class="text-xs font-mono">{{ p.dni || '—' }}</TableCell>
-            <TableCell>
-              <div class="flex flex-col gap-0.5">
-                <Badge
-                  v-if="p.payment_status === 'paid'"
-                  class="font-bold uppercase text-[9px] tracking-widest bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700 border-2 rounded-md w-fit"
-                >
-                  Pagado {{ p.amount_paid_cents ? `· €${(p.amount_paid_cents/100).toFixed(2)}` : '' }}
+    <div v-if="filteredInscriptions.length" class="space-y-4">
+      <div class="border-2 border-border rounded-xl overflow-hidden bg-card shadow-sm">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fecha</TableHead>
+              <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Participante</TableHead>
+              <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Categoría</TableHead>
+              <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Contacto</TableHead>
+              <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Documento</TableHead>
+              <TableHead class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Pago</TableHead>
+              <TableHead class="text-right text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="p in paginatedInscriptions" :key="p.id" class="group hover:bg-muted/40">
+              <TableCell class="text-xs text-muted-foreground whitespace-nowrap">
+                <div class="flex items-center gap-1.5">
+                  <Calendar class="w-3 h-3" />
+                  {{ fmtDate(p.created_at) }}
+                </div>
+              </TableCell>
+              <TableCell>
+                <div class="flex flex-col">
+                  <span class="font-bold text-sm">{{ p.name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() }}</span>
+                  <span v-if="p.birthdate" class="text-[10px] text-muted-foreground">
+                    Nac. {{ new Date(p.birthdate).toLocaleDateString('es-ES') }}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge class="font-bold uppercase text-[9px] tracking-widest border-2 rounded-md bg-muted text-foreground border-border">
+                  {{ categoryById[p.category_id]?.name ?? '—' }}
                 </Badge>
-                <Badge
-                  v-else-if="p.payment_status === 'refunded'"
-                  class="font-bold uppercase text-[9px] tracking-widest bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 border-2 rounded-md w-fit"
-                >
-                  Reembolsado
-                </Badge>
-                <Badge
-                  v-else-if="p.payment_status === 'partial_refund'"
-                  class="font-bold uppercase text-[9px] tracking-widest bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-700 border-2 rounded-md w-fit"
-                >
-                  Parcial €{{ (p.amount_refunded_cents/100).toFixed(2) }}
-                </Badge>
-                <Badge
-                  v-else
-                  variant="outline"
-                  class="font-bold uppercase text-[9px] tracking-widest w-fit"
-                >
-                  {{ p.payment_status === 'free' ? 'Gratis' : '—' }}
-                </Badge>
-              </div>
-            </TableCell>
-            <TableCell class="text-right">
-              <div class="flex items-center justify-end gap-1">
-                <AlertDialog v-if="p.payment_status === 'paid'">
-                  <AlertDialogTrigger as-child>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="h-8 w-8 text-muted-foreground hover:text-amber-600"
-                      :disabled="refunding === p.id"
-                      title="Reembolsar"
-                    >
-                      <ArrowLeft class="w-3.5 h-3.5" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Reembolsar inscripción</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Se reembolsarán €{{ (p.amount_paid_cents/100).toFixed(2) }} a <strong>{{ p.name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() }}</strong> vía Stripe. La comisión de plataforma también se reembolsará proporcionalmente.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction class="bg-amber-600 text-white hover:bg-amber-700" @click="refundParticipant(p.id)">
-                        Reembolsar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-                <AlertDialog>
-                  <AlertDialogTrigger as-child>
-                    <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive">
-                      <Trash2 class="w-3.5 h-3.5" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Eliminar inscripción</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Se eliminará a <strong>{{ p.name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() }}</strong> del concurso. Acción irreversible.
-                        <template v-if="p.payment_status === 'paid'">
-                          <br /><span class="text-amber-600">Advertencia: esta inscripción está pagada. Considera reembolsar antes de eliminar.</span>
-                        </template>
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="removeParticipant(p.id)">
-                        Eliminar
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+              </TableCell>
+              <TableCell>
+                <div class="flex flex-col gap-0.5 text-xs">
+                  <span v-if="p.email" class="flex items-center gap-1.5 text-muted-foreground">
+                    <Mail class="w-3 h-3" /> {{ p.email }}
+                  </span>
+                  <span v-if="p.phone" class="flex items-center gap-1.5 text-muted-foreground">
+                    <Phone class="w-3 h-3" /> {{ p.phone }}
+                  </span>
+                  <span v-if="p.country" class="flex items-center gap-1.5 text-muted-foreground">
+                    <MapPin class="w-3 h-3" /> {{ p.country }}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell class="text-xs font-mono">{{ p.dni || '—' }}</TableCell>
+              <TableCell>
+                <div class="flex flex-col gap-0.5">
+                  <Badge
+                    v-if="p.payment_status === 'paid'"
+                    class="font-bold uppercase text-[9px] tracking-widest bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-700 border-2 rounded-md w-fit"
+                  >
+                    Pagado {{ p.amount_paid_cents ? `· €${(p.amount_paid_cents/100).toFixed(2)}` : '' }}
+                  </Badge>
+                  <Badge
+                    v-else-if="p.payment_status === 'refunded'"
+                    class="font-bold uppercase text-[9px] tracking-widest bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 border-2 rounded-md w-fit"
+                  >
+                    Reembolsado
+                  </Badge>
+                  <Badge
+                    v-else-if="p.payment_status === 'partial_refund'"
+                    class="font-bold uppercase text-[9px] tracking-widest bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-700 border-2 rounded-md w-fit"
+                  >
+                    Parcial €{{ (p.amount_refunded_cents/100).toFixed(2) }}
+                  </Badge>
+                  <Badge
+                    v-else
+                    variant="outline"
+                    class="font-bold uppercase text-[9px] tracking-widest w-fit"
+                  >
+                    {{ p.payment_status === 'free' || p.payment_status === 'zero' ? 'Gratis' : '—' }}
+                  </Badge>
+                </div>
+              </TableCell>
+              <TableCell class="text-right">
+                <div class="flex items-center justify-end gap-1">
+                  <AlertDialog v-if="p.payment_status === 'paid'">
+                    <AlertDialogTrigger as-child>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-8 w-8 text-muted-foreground hover:text-amber-600"
+                        :disabled="refunding === p.id"
+                        title="Reembolsar"
+                      >
+                        <ArrowLeft class="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reembolsar inscripción</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Se reembolsarán €{{ (p.amount_paid_cents/100).toFixed(2) }} a <strong>{{ p.name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() }}</strong> vía Stripe. La comisión de plataforma también se reembolsará proporcionalmente.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction class="bg-amber-600 text-white hover:bg-amber-700" @click="refundParticipant(p.id)">
+                          Reembolsar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <AlertDialog>
+                    <AlertDialogTrigger as-child>
+                      <Button variant="ghost" size="icon" class="h-8 w-8 text-muted-foreground hover:text-destructive">
+                        <Trash2 class="w-3.5 h-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Eliminar inscripción</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Se eliminará a <strong>{{ p.name || `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() }}</strong> del concurso. Acción irreversible.
+                          <template v-if="p.payment_status === 'paid'">
+                            <br /><span class="text-amber-600">Advertencia: esta inscripción está pagada. Considera reembolsar antes de eliminar.</span>
+                          </template>
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction class="bg-destructive text-white hover:bg-destructive/90" @click="removeParticipant(p.id)">
+                          Eliminar
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      <!-- Pagination Controls -->
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-muted/10 border-2 border-border p-4 rounded-xl shadow-sm">
+        <div class="text-xs text-muted-foreground">
+          Mostrando <strong class="text-foreground font-semibold">{{ paginationStart }}</strong> a 
+          <strong class="text-foreground font-semibold">{{ paginationEnd }}</strong> de 
+          <strong class="text-foreground font-semibold">{{ filteredInscriptions.length }}</strong> inscripciones
+          <template v-if="filteredInscriptions.length !== totalInscriptions">
+            (filtradas de un total de {{ totalInscriptions }})
+          </template>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4">
+          <!-- Page size selector -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-muted-foreground whitespace-nowrap">Filas por página</span>
+            <Select :model-value="String(pageSize)" @update:model-value="(val) => pageSize = Number(val)">
+              <SelectTrigger class="h-8 w-[70px] border-2 bg-background font-bold text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="3">3</SelectItem>
+                <SelectItem value="5">5</SelectItem>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="15">15</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!-- Page buttons -->
+          <div class="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              class="h-8 w-8 border-2"
+              :disabled="currentPage === 1"
+              @click="currentPage--"
+            >
+              <ChevronLeft class="w-4 h-4" />
+            </Button>
+            
+            <template v-for="page in pageRange" :key="page">
+              <Button
+                variant="outline"
+                size="sm"
+                class="h-8 min-w-8 border-2 font-bold text-xs"
+                :class="currentPage === page ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-900 dark:border-zinc-100' : ''"
+                @click="currentPage = page"
+              >
+                {{ page }}
+              </Button>
+            </template>
+
+            <Button
+              variant="outline"
+              size="icon"
+              class="h-8 w-8 border-2"
+              :disabled="currentPage === totalPages"
+              @click="currentPage++"
+            >
+              <ChevronRight class="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Empty -->

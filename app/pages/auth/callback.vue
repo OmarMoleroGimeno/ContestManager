@@ -44,7 +44,7 @@ onMounted(async () => {
     return
   }
 
-  await navigateTo('/dashboard')
+  await navigateTo(authStore.homePath)
 })
 </script>
 

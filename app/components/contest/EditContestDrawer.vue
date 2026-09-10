@@ -25,7 +25,7 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
 } from '@/components/ui/number-field'
-import { Save, Target, Plus, Layers, CalendarRange, Upload, X, Link2, Copy, Check, Euro } from 'lucide-vue-next'
+import { Save, Target, Plus, Layers, CalendarRange, Upload, X, Link2, Copy, Check, Euro, Lock } from 'lucide-vue-next'
 import { parseDate } from '@internationalized/date'
 import { type DateRange } from 'reka-ui'
 import { useContestStore } from '@/stores/contest'
@@ -43,6 +43,19 @@ const emit = defineEmits<{
 
 const contestStore = useContestStore()
 const isUpdating = ref(false)
+
+/**
+ * A finished or cancelled contest is locked: the server rejects any PATCH on it,
+ * so the form is shown read-only instead of letting the user hit a 409.
+ */
+const isLocked = computed(() =>
+  props.contest?.status === 'finished' || props.contest?.status === 'cancelled'
+)
+const lockReason = computed(() =>
+  props.contest?.status === 'finished'
+    ? 'Este concurso está finalizado. Su configuración ya no se puede modificar.'
+    : 'Este concurso está cancelado. Su configuración ya no se puede modificar.'
+)
 const drawerRange = ref<DateRange | null>(null)
 const uploadingCover = ref(false)
 
@@ -212,10 +225,21 @@ const handleOpenAutoFocus = (e: Event) => {
         </DrawerHeader>
         
         <div style="flex: 1 1 0%; overflow-y: auto; min-height: 0;" class="p-4 sm:p-6">
+          <div
+            v-if="isLocked"
+            class="mb-6 flex items-start gap-3 rounded-lg border-2 border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30"
+          >
+            <Lock class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <p class="text-sm text-amber-800 dark:text-amber-200">{{ lockReason }}</p>
+          </div>
+
+          <!-- `disabled` on a fieldset disables every control nested inside it -->
+          <fieldset :disabled="isLocked" :class="isLocked ? 'opacity-60' : ''">
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
             <!-- Columna Izquierda: Identificación y Parámetros -->
             <div class="space-y-6">
               <div class="grid grid-cols-1 gap-4">
+
                 <!-- Nombre y Descripción -->
                 <div class="grid gap-4 pt-2">
                   <div class="grid gap-2">
@@ -249,7 +273,7 @@ const handleOpenAutoFocus = (e: Event) => {
                 </div>
 
                 <!-- Estado y Tipo -->
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid gap-4">
                   <div class="grid gap-2">
                     <Label for="status" class="text-xs font-bold uppercase tracking-wider text-zinc-400">Estado</Label>
                     <Select v-model="editForm.status" :modal="false">
@@ -264,26 +288,13 @@ const handleOpenAutoFocus = (e: Event) => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div class="grid gap-2">
-                    <Label for="type" class="text-xs font-bold uppercase tracking-wider text-zinc-400">Tipo</Label>
-                    <Select v-model="editForm.type" :modal="false">
-                      <SelectTrigger id="type" class="h-10 border-2">
-                        <SelectValue placeholder="Tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="music">Música</SelectItem>
-                        <SelectItem value="dance">Baile</SelectItem>
-                        <SelectItem value="general">General</SelectItem>
-                        <SelectItem value="libre">Libre</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </div>
             </div>
 
-            <!-- Columna Derecha: Configuración Técnica y Fechas -->
+            <!-- Columna Derecha:  Fechas -->
             <div class="space-y-8">
+
               <!-- Calendario -->
               <div class="grid gap-3">
                 <Label class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -354,11 +365,12 @@ const handleOpenAutoFocus = (e: Event) => {
               </div>
             </div>
           </div>
+          </fieldset>
         </div>
 
         <DrawerFooter style="flex-shrink: 0;" class="flex flex-row justify-end border-t gap-3 p-6 pt-4">
           <Button variant="outline" @click="emit('update:open', false)" class="text-[10px] font-bold uppercase tracking-widest px-6 bg-zinc-50 dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 border-2 rounded-md">Cerrar</Button>
-          <Button class="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 gap-2 text-[10px] font-bold uppercase tracking-widest px-6 border-2 border-border rounded-md" :disabled="isUpdating" @click="handleUpdate">
+          <Button v-if="!isLocked" class="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 gap-2 text-[10px] font-bold uppercase tracking-widest px-6 border-2 border-border rounded-md" :disabled="isUpdating" @click="handleUpdate">
             <Save class="w-4 h-4" />
             {{ isUpdating ? 'Guardando...' : 'Guardar Cambios' }}
           </Button>

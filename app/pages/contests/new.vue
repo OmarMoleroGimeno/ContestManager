@@ -102,7 +102,7 @@ async function addCategory() {
     if (categoryMaxParticipants.value != null) body.max_participants = categoryMaxParticipants.value
     if (categoryEntryFee.value != null) body.entry_fee_cents = categoryEntryFee.value * 100
 
-    const data = await ($fetch as any)(`/api/contests/${createdContest.value.id}/categories`, {
+    const data = await (apiClient as any)(`/api/contests/${createdContest.value.id}/categories`, {
       method: 'POST', body,
     })
     const cat: CategoryEntry = { id: data.id, name: data.name, min_age: data.min_age ?? null, max_age: data.max_age ?? null, max_participants: data.max_participants ?? null, entry_fee_cents: data.entry_fee_cents ?? null, judges: [] }
@@ -243,7 +243,7 @@ async function confirmJudges() {
     const [addResults] = await Promise.all([
       toAdd.length
         ? Promise.all(toAdd.map(j =>
-            ($fetch as any)(`/api/contests/${contestId}/members`, {
+            (apiClient as any)(`/api/contests/${contestId}/members`, {
               method: 'POST',
               body: { email: j.email, full_name: j.full_name, role: 'judge' },
             })
@@ -251,7 +251,7 @@ async function confirmJudges() {
         : Promise.resolve([] as any[]),
       toRemove.length
         ? Promise.all(toRemove.map(j =>
-            ($fetch as any)(`/api/contests/${contestId}/members/${j.memberId}`, { method: 'DELETE' })
+            (apiClient as any)(`/api/contests/${contestId}/members/${j.memberId}`, { method: 'DELETE' })
           ))
         : Promise.resolve([]),
     ])

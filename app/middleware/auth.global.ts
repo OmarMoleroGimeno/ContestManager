@@ -32,7 +32,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       && !to.path.startsWith('/invite')
       && !to.path.startsWith('/auth/callback')
       && !fromOnboarding) {
-    return navigateTo('/dashboard')
+    return navigateTo(authStore.homePath)
   }
 
   // Onboarding checks — preserve returnTo when coming from /join

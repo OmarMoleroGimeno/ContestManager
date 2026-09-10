@@ -55,8 +55,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "vitest": "^3.2.4",
+    "@nuxtjs/supabase": "^2.0.6",
     "vitepress": "^1.5.0",
-    "@nuxtjs/supabase": "^2.0.6"
+    "vitest": "^3.2.4"
   }
 }

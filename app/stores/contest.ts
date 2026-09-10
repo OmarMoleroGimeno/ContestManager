@@ -7,9 +7,9 @@ import { useParticipantsStore } from './participants'
 import { useRoundParticipantsStore } from './round-participants'
 import { useContestMembersStore } from './contest-members'
 import { useScoresStore } from './scores'
-import { usePrizesStore } from './prizes'
 import { organizationsApi } from '../api/modules/OrganizationsApi'
-import type { Contest, Category, Round, Participant, ContestFormPayload, Prize, Rehearsal, JudgePoolMember } from '~~/types'
+import { apiClient } from '~/api/apiClient'
+import type { Contest, Category, Round, Participant, ContestFormPayload, Rehearsal, JudgePoolMember } from '~~/types'
 
 export const useContestStore = defineStore('contest', () => {
   const contestsStore = useContestsStore()
@@ -19,7 +19,6 @@ export const useContestStore = defineStore('contest', () => {
   const roundParticipantsStore = useRoundParticipantsStore()
   const contestMembersStore = useContestMembersStore()
   const scoresStore = useScoresStore()
-  const prizesStore = usePrizesStore()
 
   const judgePool = ref<JudgePoolMember[]>([])
   const rehearsals = ref<Rehearsal[]>([])
@@ -34,7 +33,6 @@ export const useContestStore = defineStore('contest', () => {
   const members = computed(() => contestMembersStore.byContest(contestsStore.current?.id ?? ''))
   const roundParticipantsMap = computed(() => roundParticipantsStore.byRound)
   const roundSummariesMap = computed(() => scoresStore.summaries)
-  const prizes = computed(() => prizesStore.items)
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
@@ -146,7 +144,7 @@ export const useContestStore = defineStore('contest', () => {
   }
 
   async function promoteParticipants(roundId: string, participantIds: string[], nextRoundName?: string, isFinal?: boolean) {
-    const data = await ($fetch as any)(`/api/rounds/${roundId}/promote`, {
+    const data = await (apiClient as any)(`/api/rounds/${roundId}/promote`, {
       method: 'POST',
       body: { participantIds, nextRoundName, isFinal }
     })
@@ -162,10 +160,6 @@ export const useContestStore = defineStore('contest', () => {
     const contestId = contestsStore.current?.id
     if (!contestId) return
     return contestMembersStore.remove(contestId, memberId)
-  }
-
-  async function addPrize(payload: { category_id: string; description: string }) {
-    return prizesStore.create(payload)
   }
 
   async function fetchJudgePool(orgId: string) {
@@ -197,7 +191,6 @@ export const useContestStore = defineStore('contest', () => {
     judgePool,
     roundParticipantsMap,
     roundSummariesMap,
-    prizes,
     rehearsals,
     fetchContests,
     fetchContest,
@@ -218,7 +211,6 @@ export const useContestStore = defineStore('contest', () => {
     deleteRound,
     promoteParticipants,
     removeMember,
-    addPrize,
     fetchJudgePool,
     saveToJudgePool,
     deleteFromJudgePool,

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { apiClient } from '@/api/apiClient'
 import AvatarBubble from '@/components/ui/avatar/AvatarBubble.vue'
 import {
-  ArrowLeft, Trophy, MapPin, Clock, Users, Star,
+  Trophy, MapPin, Clock, Users, Star,
   CheckCircle2, AlertCircle, Hash, User, Edit3, ThumbsUp, FileText
 } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
@@ -60,6 +61,11 @@ useRoundScoresRealtime(roundId, async () => {
 
 const roundIsActive = computed(() => round.value?.status === 'active')
 const roundIsClosed = computed(() => round.value?.status === 'closed')
+
+// Qualification is only decided when the round is resolved (closed). Until then
+// `is_qualified` still holds its pre-verdict value, so rendering it would claim
+// "Eliminado" for people nobody has judged yet.
+const hasVerdict = computed(() => roundIsClosed.value)
 const roundIsPending = computed(() => round.value?.status === 'pending')
 
 // ── Scoring modal ────────────────────────────────────────────────
@@ -96,7 +102,6 @@ async function submitScore() {
   isSubmittingScore.value = true
   try {
     const participantId = selectedSlot.value.participant_id ?? selectedSlot.value.participants?.id
-    console.log('[realtime/scores] SEND POST /api/scores (judge)', { round_id: round.value.id, participant_id: participantId, value: scoreForm.value.value })
     const res = await $fetch('/api/scores', {
       method: 'POST',
       headers: { Authorization: `Bearer ${authStore.session.access_token}` },
@@ -165,7 +170,7 @@ async function loadRanking() {
   if (!category.value?.id || rankingLoading.value) return
   rankingLoading.value = true
   try {
-    rankingData.value = await $fetch<any>(`/api/categories/${category.value.id}/ranking`)
+    rankingData.value = await apiClient<any>(`/api/categories/${category.value.id}/ranking`)
   } catch (e) {
     toast.error('Error al cargar el ranking')
   } finally {
@@ -178,7 +183,7 @@ watch([isRankingRound, category], ([r, c]) => {
 </script>
 
 <template>
-  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl mx-auto">
+  <div class="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
     <!-- Error -->
     <div v-if="error" class="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-600 dark:text-red-400">
@@ -201,12 +206,6 @@ watch([isRankingRound, category], ([r, c]) => {
       <div class="space-y-3">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="flex items-start gap-3">
-            <NuxtLink
-              :to="`/my-contests/${contest.slug}/categories/${category?.id}`"
-              class="p-1 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0 mt-1"
-            >
-              <ArrowLeft class="w-4 h-4" />
-            </NuxtLink>
             <div>
             <div class="flex flex-wrap items-center gap-2">
               <Trophy v-if="isRankingRound" class="w-6 h-6 text-amber-500" />
@@ -366,7 +365,7 @@ watch([isRankingRound, category], ([r, c]) => {
                 <p class="text-sm font-semibold">{{ mySlot.location }}</p>
               </div>
             </div>
-            <div v-if="mySlot.is_qualified !== null" class="flex items-center gap-3">
+            <div v-if="hasVerdict && mySlot.is_qualified !== null" class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                 :class="mySlot.is_qualified ? 'bg-emerald-100 dark:bg-emerald-950/40' : 'bg-red-100 dark:bg-red-950/40'">
                 <CheckCircle2 v-if="mySlot.is_qualified" class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -486,9 +485,9 @@ watch([isRankingRound, category], ([r, c]) => {
               </span>
             </template>
 
-            <!-- Qualified badge (visible to everyone) -->
+            <!-- Qualified badge (visible to everyone, only once the round is resolved) -->
             <Badge
-              v-if="slot.is_qualified !== null"
+              v-if="hasVerdict && slot.is_qualified !== null"
               class="text-[10px] font-bold border-2 shrink-0"
               :class="slot.is_qualified
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'

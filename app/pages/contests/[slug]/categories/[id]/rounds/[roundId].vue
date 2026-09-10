@@ -26,6 +26,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import AvatarBubble from '@/components/ui/avatar/AvatarBubble.vue'
 import { useContestStore } from '@/stores/contest'
+import { apiClient } from '@/api/apiClient'
 import { storeToRefs } from 'pinia'
 import { toast } from 'vue-sonner'
 import { getStatusClasses } from '@/utils/styles'
@@ -185,19 +186,19 @@ const saveEditedScore = async (judgeId: string) => {
   if (!selectedParticipantId.value) return
   isSavingScore.value = true
   try {
-    console.log('[realtime/scores] SEND POST /api/scores')
-    await $fetch('/api/scores' as any, {
+    const scoreBody = {
+      round_id: roundId,
+      participant_id: selectedParticipantId.value,
+      judge_id: judgeId,
+      value: editDraft.value.value,
+      notes: editDraft.value.notes,
+      promote: editDraft.value.promote,
+      admin_user_id: adminUserId.value,
+      admin_user_name: adminUserName.value,
+    }
+    await apiClient('/api/scores' as any, {
       method: 'POST',
-      body: {
-        round_id: roundId,
-        participant_id: selectedParticipantId.value,
-        judge_id: judgeId,
-        value: editDraft.value.value,
-        notes: editDraft.value.notes,
-        promote: editDraft.value.promote,
-        admin_user_id: adminUserId.value,
-        admin_user_name: adminUserName.value,
-      }
+      body: scoreBody
     })
     toast.success('Puntuación actualizada')
     editingJudgeId.value = null
@@ -265,19 +266,19 @@ const saveJudgeScore = async (participantId: string) => {
   if (!selectedJudgeUserId.value) return
   isSavingJudgeScore.value = true
   try {
-    console.log('[realtime/scores] SEND POST /api/scores')
-    await $fetch('/api/scores' as any, {
+    const scoreBody = {
+      round_id: roundId,
+      participant_id: participantId,
+      judge_id: selectedJudgeUserId.value,
+      value: judgeEditDraft.value.value,
+      notes: judgeEditDraft.value.notes,
+      promote: judgeEditDraft.value.promote,
+      admin_user_id: adminUserId.value,
+      admin_user_name: adminUserName.value,
+    }
+    await apiClient('/api/scores' as any, {
       method: 'POST',
-      body: {
-        round_id: roundId,
-        participant_id: participantId,
-        judge_id: selectedJudgeUserId.value,
-        value: judgeEditDraft.value.value,
-        notes: judgeEditDraft.value.notes,
-        promote: judgeEditDraft.value.promote,
-        admin_user_id: adminUserId.value,
-        admin_user_name: adminUserName.value,
-      }
+      body: scoreBody
     })
     toast.success('Puntuación actualizada')
     editingParticipantId.value = null
@@ -310,19 +311,19 @@ const saveAdminScore = async () => {
   if (!adminScoreDraft.value || !adminUserId.value) return
   isSavingAdminScore.value = true
   try {
-    console.log('[realtime/scores] SEND POST /api/scores')
-    await $fetch('/api/scores' as any, {
+    const scoreBody = {
+      round_id: roundId,
+      participant_id: adminScoreDraft.value.participantId,
+      judge_id: adminScoreDraft.value.judgeId,
+      value: adminScoreDraft.value.value,
+      notes: adminScoreDraft.value.notes,
+      promote: adminScoreDraft.value.promote,
+      admin_user_id: adminUserId.value,
+      admin_user_name: adminUserName.value,
+    }
+    await apiClient('/api/scores' as any, {
       method: 'POST',
-      body: {
-        round_id: roundId,
-        participant_id: adminScoreDraft.value.participantId,
-        judge_id: adminScoreDraft.value.judgeId,
-        value: adminScoreDraft.value.value,
-        notes: adminScoreDraft.value.notes,
-        promote: adminScoreDraft.value.promote,
-        admin_user_id: adminUserId.value,
-        admin_user_name: adminUserName.value,
-      }
+      body: scoreBody
     })
     toast.success('Puntuación establecida por administrador')
     isAdminSettingScore.value = false
@@ -374,7 +375,7 @@ const saveOverride = async () => {
   try {
     const rawVal = overrideDraft.value.value
     const valueNum = (rawVal === '' || rawVal === null || rawVal === undefined) ? null : Number(rawVal)
-    await $fetch(`/api/round-participants/${overrideDraft.value.rpId}/override` as any, {
+    await apiClient(`/api/round-participants/${overrideDraft.value.rpId}/override` as any, {
       method: 'PATCH',
       body: {
         final_score_override: valueNum,
@@ -403,7 +404,7 @@ const openAuditLog = async () => {
   isAuditOpen.value = true
   isLoadingAudit.value = true
   try {
-    const data = await $fetch(`/api/rounds/${roundId}/audit-logs` as any) as any
+    const data = await apiClient(`/api/rounds/${roundId}/audit-logs` as any) as any
     auditLogs.value = (data?.items || [])
   } catch (e) {
     toast.error('Error cargando registro')
@@ -446,7 +447,7 @@ async function openScoreLogs(participantId: string, judgeUserId: string, partici
   isScoreLogsOpen.value = true
   isLoadingScoreLogs.value = true
   try {
-    const data = await $fetch(`/api/rounds/${roundId}/audit-logs` as any) as any
+    const data = await apiClient(`/api/rounds/${roundId}/audit-logs` as any) as any
     scoreLogs.value = (data?.items || []).filter((l: any) =>
       l.participant_id === participantId && l.judge_id === judgeUserId
     )
@@ -564,7 +565,7 @@ async function handleToggleFinal(val: boolean) {
   try {
     if (val) {
       // Mark round as final + auto-create ranking pseudo-round (unpublished)
-      await $fetch(`/api/rounds/${roundId}`, {
+      await apiClient(`/api/rounds/${roundId}`, {
         method: 'PATCH',
         body: { is_final: true }
       })
@@ -574,7 +575,7 @@ async function handleToggleFinal(val: boolean) {
         (r: any) => r.category_id === categoryId && r.is_ranking === true
       )
       if (!existingRanking) {
-        await $fetch(`/api/categories/${categoryId}/rounds`, {
+        await apiClient(`/api/categories/${categoryId}/rounds`, {
           method: 'POST',
           body: {
             category_id: categoryId,
@@ -597,7 +598,7 @@ async function handleToggleFinal(val: boolean) {
       if (ranking) {
         await contestStore.deleteRound(ranking.id)
       }
-      await $fetch(`/api/rounds/${roundId}`, {
+      await apiClient(`/api/rounds/${roundId}`, {
         method: 'PATCH',
         body: { is_final: false, status: 'active', closed_at: null }
       })
@@ -621,7 +622,7 @@ const rankingData = ref<{ rounds: Array<{ id: string; name: string; order: numbe
 
 async function fetchRanking() {
   try {
-    const data = await $fetch<any>(`/api/categories/${categoryId}/ranking`)
+    const data = await apiClient<any>(`/api/categories/${categoryId}/ranking`)
     rankingData.value = data
   } catch (e) {
     toast.error('Error al cargar el ranking')
@@ -740,7 +741,7 @@ async function togglePublish() {
   isPublishing.value = true
   try {
     const next = !isPublished.value
-    await $fetch(`/api/rounds/${roundId}`, {
+    await apiClient(`/api/rounds/${roundId}`, {
       method: 'PATCH',
       body: { is_published: next }
     })
@@ -774,7 +775,7 @@ async function openHistory(participantId: string) {
   historyData.value = null
   expandedHistoryRounds.value = new Set()
   try {
-    historyData.value = await $fetch<any>(`/api/categories/${categoryId}/participants/${participantId}/history`)
+    historyData.value = await apiClient<any>(`/api/categories/${categoryId}/participants/${participantId}/history`)
     // Auto-expand final round (o la última) por defecto
     const rs = historyData.value?.rounds || []
     const finalR = rs.find((r: any) => r.is_final) || rs[rs.length - 1]
@@ -786,7 +787,7 @@ async function openHistory(participantId: string) {
 async function handleFinalizeFinal() {
   isFinalizingFinal.value = true
   try {
-    await $fetch(`/api/rounds/${roundId}`, {
+    await apiClient(`/api/rounds/${roundId}`, {
       method: 'PATCH',
       body: { status: 'closed', is_final: true, closed_at: new Date().toISOString() }
     })
@@ -797,7 +798,7 @@ async function handleFinalizeFinal() {
       (r: any) => r.category_id === categoryId && r.is_ranking === true
     )
     if (!existingRanking) {
-      await $fetch(`/api/categories/${categoryId}/rounds`, {
+      await apiClient(`/api/categories/${categoryId}/rounds`, {
         method: 'POST',
         body: {
           category_id: categoryId,
@@ -826,56 +827,6 @@ async function handleFinalizeFinal() {
     toast.error('Error al finalizar el concurso')
   } finally {
     isFinalizingFinal.value = false
-  }
-}
-
-// ── Revertir finalización (rollback final round) ──────────────────────────────
-const isRevertFinalOpen = ref(false)
-const isReverting = ref(false)
-async function handleRevertFinal() {
-  isReverting.value = true
-  try {
-    // Determine the actual final round id — if we're currently on the ranking
-    // pseudo-round, find the real final round in this category.
-    const currentIsRanking = (currentRound.value as any)?.is_ranking === true
-    const finalRound = currentIsRanking
-      ? rounds.value.find((r: any) => r.category_id === categoryId && r.is_final === true)
-      : currentRound.value
-    const finalRoundId = (finalRound as any)?.id || roundId
-
-    // 1. Find ranking pseudo-round in this category, delete it (reopens category + makes prev active)
-    const ranking = rounds.value.find((r: any) => r.category_id === categoryId && r.is_ranking === true)
-    if (ranking) {
-      await contestStore.deleteRound(ranking.id)
-    } else {
-      // No ranking → just reopen category + reactivate this round
-      await contestStore.updateCategory(categoryId, { status: 'active' } as any)
-    }
-    // Always reopen category (deleteRound may not do it if round had no is_ranking detection)
-    await contestStore.updateCategory(categoryId, { status: 'active' } as any)
-
-    // 2. Clear is_final + reopen the real final round
-    await $fetch(`/api/rounds/${finalRoundId}`, {
-      method: 'PATCH',
-      body: { is_final: false, status: 'active', closed_at: null }
-    })
-    // 3. Refresh
-    const contestId = currentContest.value?.id
-    if (contestId) {
-      const roundsStore = useRoundsStore()
-      roundsStore.invalidate(contestId)
-      await roundsStore.fetch(contestId)
-    }
-    isRevertFinalOpen.value = false
-    toast.success('Finalización revertida · Ronda reactivada')
-    // If we were on the ranking (now deleted), navigate to the reopened final round
-    if (currentIsRanking && finalRoundId && finalRoundId !== roundId) {
-      router.push(`/contests/${route.params.slug}/categories/${categoryId}/rounds/${finalRoundId}`)
-    }
-  } catch (e: any) {
-    toast.error(e?.statusMessage || e?.data?.statusMessage || 'Error al revertir')
-  } finally {
-    isReverting.value = false
   }
 }
 
@@ -918,7 +869,7 @@ const saveEnsayos = async () => {
   try {
     await Promise.all(
       Object.entries(ensayosDraft.value).map(([rpId, fields]) =>
-        $fetch(`/api/round-participants/${rpId}` as any, { method: 'PATCH', body: fields })
+        apiClient(`/api/round-participants/${rpId}` as any, { method: 'PATCH', body: fields })
       )
     )
     await contestStore.fetchRoundParticipants(roundId)
@@ -950,7 +901,7 @@ const saveActuaciones = async () => {
   try {
     await Promise.all(
       Object.entries(actuacionesDraft.value).map(([rpId, fields]) =>
-        $fetch(`/api/round-participants/${rpId}` as any, {
+        apiClient(`/api/round-participants/${rpId}` as any, {
           method: 'PATCH',
           body: fields
         })
@@ -1263,14 +1214,6 @@ function statusLabel(status: string) {
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <Button
-                variant="outline"
-                size="sm"
-                class="rounded-xl font-bold border-2 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                @click="isRevertFinalOpen = true"
-              >
-                <ArrowLeft class="w-3.5 h-3.5 mr-1.5" /> Revertir
-              </Button>
-              <Button
                 :variant="isPublished ? 'outline' : 'default'"
                 size="sm"
                 :disabled="isPublishing"
@@ -1444,26 +1387,11 @@ function statusLabel(status: string) {
             >
               Finalizar &amp; Promover
             </Button>
-            <Button
-              v-if="isFinalRound"
-              variant="outline"
-              class="w-full h-10 bg-white dark:bg-zinc-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-md font-bold uppercase tracking-widest text-[10px] border-2 border-amber-300 dark:border-amber-700"
-              @click="isRevertFinalOpen = true"
-            >
-              <ArrowLeft class="w-3.5 h-3.5 mr-2" /> Revertir Finalización
-            </Button>
           </div>
           <div v-else class="pt-2 space-y-2">
             <div class="w-full h-11 bg-zinc-50 dark:bg-zinc-900 border-2 border-zinc-100 dark:border-zinc-800 rounded-md flex items-center justify-center gap-2 opacity-60">
               <Badge variant="outline" class="border-2 border-zinc-200 dark:border-zinc-800 text-zinc-400 font-bold uppercase text-[9px] tracking-widest">Etapa Archivada</Badge>
             </div>
-            <Button
-              v-if="isFinalRound"
-              class="w-full h-11 bg-white dark:bg-zinc-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-amber-700 dark:text-amber-400 rounded-md font-bold uppercase tracking-widest text-[10px] border-2 border-amber-300 dark:border-amber-700 active:scale-95 transition-all hover:scale-[1.02]"
-              @click="isRevertFinalOpen = true"
-            >
-              <ArrowLeft class="w-3.5 h-3.5 mr-2" /> Revertir Finalización
-            </Button>
           </div>
         </Card>
 
@@ -2157,45 +2085,6 @@ function statusLabel(status: string) {
     </Dialog>
 
     <!-- ── Confirmar revertir finalización ───────────────────────────────────── -->
-    <Dialog v-model:open="isRevertFinalOpen">
-      <DialogContent class="max-w-md rounded-2xl overflow-hidden p-0 border border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-950">
-        <div class="p-6 pr-16 border-b border-zinc-100 dark:border-zinc-800 bg-gradient-to-r from-amber-50 to-white dark:from-amber-950/30 dark:to-zinc-900/50 flex items-center gap-4">
-          <div class="w-11 h-11 rounded-xl bg-amber-500 flex items-center justify-center shadow-sm shrink-0">
-            <ArrowLeft class="w-5 h-5 text-white" />
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-[10px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-0.5">Rollback</p>
-            <h2 class="text-lg font-bold tracking-tight text-zinc-900 dark:text-zinc-100 uppercase">Revertir Finalización</h2>
-          </div>
-        </div>
-        <div class="p-6 space-y-3">
-          <p class="text-sm text-zinc-700 dark:text-zinc-300">
-            Esta acción <strong>elimina el ranking publicado</strong>, reabre la categoría y reactiva esta ronda para permitir nuevas modificaciones.
-          </p>
-          <p class="text-xs text-zinc-500 dark:text-zinc-400">
-            Las notas existentes se conservan. Podrás volver a finalizar cuando lo decidas.
-          </p>
-        </div>
-        <DialogFooter class="p-5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/30 flex justify-end gap-3">
-          <Button
-            variant="ghost"
-            class="font-bold h-9 px-5 uppercase text-[10px] tracking-widest"
-            :disabled="isReverting"
-            @click="isRevertFinalOpen = false"
-          >
-            Cancelar
-          </Button>
-          <Button
-            class="bg-amber-500 hover:bg-amber-600 text-white font-bold h-9 px-6 uppercase text-[10px] tracking-widest rounded-lg shadow-sm disabled:opacity-50"
-            :disabled="isReverting"
-            @click="handleRevertFinal"
-          >
-            <Activity v-if="isReverting" class="w-3.5 h-3.5 mr-2 animate-spin" />
-            {{ isReverting ? 'Revirtiendo...' : 'Revertir Finalización' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
     <!-- ── Ranking final dialog ──────────────────────────────────────────────── -->
     <Dialog v-model:open="isRankingOpen">

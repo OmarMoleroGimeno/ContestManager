@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
 import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { RoundCreateSchema } from '~~/server/utils/schemas'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -7,7 +8,12 @@ export default defineEventHandler(async (event) => {
   await requireOrgOwnerOrMember(event, id)
 
   const admin = serverSupabaseAdmin()
-  const body = await readBody(event)
+  const rawBody = await readBody(event)
+  const parsed = RoundCreateSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid request', data: parsed.error.issues })
+  }
+  const body = parsed.data as Record<string, any>
 
   // Validate category belongs to this contest if provided
   if (body.category_id) {

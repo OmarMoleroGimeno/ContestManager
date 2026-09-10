@@ -2,7 +2,11 @@ import { z } from 'zod'
 
 // ─── Primitives ──────────────────────────────────────────────────────────────
 
-export const uuidString = z.string().uuid()
+// Postgres' `uuid` type accepts any 8-4-4-4-12 hex string — it does not enforce
+// RFC4122 version/variant nibbles. Seeded/demo rows use human-readable ids
+// (e.g. "bbbbbbbb-0000-...") that fail Zod's stricter `.uuid()`, so use `.guid()`
+// to match what the database actually accepts.
+export const uuidString = z.guid()
 export const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
 export const emailString = z.string().email()
 export const phoneString = z.string().regex(/^\+\d{7,15}$/).nullable().optional()
@@ -170,4 +174,69 @@ const ImportRowSchema = z.object({
 
 export const ImportBodySchema = z.object({
   rows: z.array(ImportRowSchema).min(1).max(1000),
+})
+
+export const RoundPatchSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  order: z.number().int().min(0).optional(),
+  status: z.enum(['pending', 'active', 'closed']).optional(),
+  scoring_type: z.enum(['numeric', 'rank', 'vote']).optional(),
+  max_score: z.number().min(0).max(1000).nullable().optional(),
+  next_round_id: uuidString.nullable().optional(),
+  is_final: z.boolean().optional(),
+  is_ranking: z.boolean().optional(),
+  is_published: z.boolean().optional(),
+  started_at: z.string().nullable().optional(),
+  closed_at: z.string().nullable().optional(),
+})
+
+export const RoundCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  order: z.number().int().min(0).optional(),
+  scoring_type: z.enum(['numeric', 'rank', 'vote']).optional(),
+  max_score: z.number().min(0).max(1000).nullable().optional(),
+  is_final: z.boolean().optional(),
+  is_ranking: z.boolean().optional(),
+  category_id: uuidString.optional(),
+})
+
+export const CategoryCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).nullable().optional(),
+  order: z.number().int().min(0).optional(),
+  min_age: z.number().int().min(0).nullable().optional(),
+  max_age: z.number().int().min(0).nullable().optional(),
+  artistic_type: z.string().max(100).nullable().optional(),
+  speciality: z.string().max(100).nullable().optional(),
+  max_participants: z.number().int().min(1).nullable().optional(),
+  entry_fee_cents: z.number().int().min(0).nullable().optional(),
+})
+
+// `rehearsal_time` / `performance_time` are TEXT (datetime-local strings), per
+// the project's time-field convention — not timestamps.
+export const RoundParticipantPatchSchema = z.object({
+  rehearsal_room: z.string().max(200).nullable().optional(),
+  rehearsal_time: z.string().max(64).nullable().optional(),
+  rehearsal_accompanist: z.string().max(200).nullable().optional(),
+  performance_time: z.string().max(64).nullable().optional(),
+})
+
+/** `final_score_override: null` clears the override. */
+export const ScoreOverrideSchema = z.object({
+  final_score_override: z.number().min(0).max(1000).nullable().optional(),
+  final_score_override_notes: z.string().max(1000).nullable().optional(),
+})
+
+const FormFieldSchema = z.object({
+  key: z.string().min(1).max(100),
+  label: z.string().min(1).max(200),
+  type: z.string().min(1).max(50),
+  required: z.boolean().optional(),
+  options: z.array(z.string().max(200)).max(100).optional(),
+  placeholder: z.string().max(200).nullable().optional(),
+  order: z.number().int().min(0).optional(),
+}).loose()
+
+export const FormSchemaBodySchema = z.object({
+  fields: z.array(FormFieldSchema).max(100),
 })

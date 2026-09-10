@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Plus } from 'lucide-vue-next'
+import { Plus, Layers } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import ContestCard from '~/components/contest/ContestCard.vue'
 import { contestsApi } from '~/api/modules/ContestsApi'
@@ -39,8 +39,22 @@ const handleDelete = async (id: string) => {
       </NuxtLink>
     </div>
     
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      <ContestCard v-for="c in contests" :key="c.id" :contest="c" @delete="handleDelete" />
+    <div v-if="contests.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+      <ContestCard
+        v-for="c in contests"
+        :key="c.id"
+        :contest="c"
+        :to="`/contests/${c.slug}`"
+        deletable
+        @delete="handleDelete"
+      />
+    </div>
+
+    <!-- Empty state -->
+    <div v-else class="rounded-xl border-2 border-dashed border-border bg-muted/30 py-16 text-center">
+      <Layers class="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
+      <p class="text-base font-semibold text-muted-foreground">Sin concursos</p>
+      <p class="text-sm text-muted-foreground/70 mt-1">Crea tu primer concurso para empezar a organizar competencias.</p>
     </div>
   </div>
 </template>

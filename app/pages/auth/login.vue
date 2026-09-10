@@ -176,7 +176,7 @@ async function handleOAuth(provider: 'google' | 'facebook') {
         class="w-24 h-24 object-contain"
       />
       <h1 class="text-2xl font-bold tracking-tight text-zinc-100">
-        {{ mode === 'login' ? 'Log in to ContestSaaS' : 'Crea tu cuenta' }}
+        {{ mode === 'login' ? 'Inicia sesión en ContestSaaS' : 'Crea tu cuenta' }}
       </h1>
       <p class="text-sm text-zinc-400">
         <template v-if="mode === 'login'">
@@ -202,7 +202,7 @@ async function handleOAuth(provider: 'google' | 'facebook') {
         <svg v-else viewBox="0 0 24 24" class="w-4 h-4">
           <path fill="#fff" d="M21.35 11.1H12v3.83h5.34c-.23 1.4-1.66 4.1-5.34 4.1-3.21 0-5.83-2.66-5.83-5.94S8.79 7.16 12 7.16c1.83 0 3.05.78 3.75 1.45l2.55-2.46C16.7 4.65 14.55 3.7 12 3.7 6.93 3.7 2.83 7.8 2.83 12.87S6.93 22.05 12 22.05c6.93 0 9.55-4.86 9.55-7.4 0-.5-.05-.88-.2-1.55z"/>
         </svg>
-        Log in with Google
+        Entrar con Google
       </button>
       <button
         type="button"
@@ -214,14 +214,14 @@ async function handleOAuth(provider: 'google' | 'facebook') {
         <svg v-else viewBox="0 0 24 24" class="w-4 h-4">
           <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
         </svg>
-        Log in with Facebook
+        Entrar con Facebook
       </button>
     </div>
 
     <!-- Divider -->
     <div class="flex items-center gap-3">
       <div class="flex-1 h-px bg-white/10" />
-      <span class="text-xs text-zinc-500">or</span>
+      <span class="text-xs text-zinc-500">o</span>
       <div class="flex-1 h-px bg-white/10" />
     </div>
 
@@ -242,9 +242,9 @@ async function handleOAuth(provider: 'google' | 'facebook') {
 
       <div class="space-y-1.5">
         <div class="flex items-center justify-between">
-          <label for="password" class="text-sm text-zinc-300">Password</label>
+          <label for="password" class="text-sm text-zinc-300">Contraseña</label>
           <NuxtLink to="/auth/reset-password" class="text-xs text-zinc-400 hover:text-zinc-100 transition-colors">
-            Forgot your password?
+            ¿Olvidaste tu contraseña?
           </NuxtLink>
         </div>
         <div class="relative">
@@ -283,7 +283,7 @@ async function handleOAuth(provider: 'google' | 'facebook') {
       </div>
 
       <div v-if="mode === 'register'" class="space-y-1.5">
-        <label for="confirmPassword" class="text-sm text-zinc-300">Confirm Password</label>
+        <label for="confirmPassword" class="text-sm text-zinc-300">Confirmar contraseña</label>
         <div class="relative">
           <input
             id="confirmPassword"
@@ -315,7 +315,7 @@ async function handleOAuth(provider: 'google' | 'facebook') {
         <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
         {{ loading
           ? (mode === 'login' ? 'Ingresando…' : 'Creando cuenta…')
-          : (mode === 'login' ? 'Log In' : 'Crear cuenta') }}
+          : (mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta') }}
       </button>
 
       <div v-if="mode === 'register'" class="space-y-3">
@@ -330,9 +330,9 @@ async function handleOAuth(provider: 'google' | 'facebook') {
         </label>
       </div>
       <p v-else class="text-xs text-zinc-500 text-center">
-        By signing in, you agree to our
-        <a href="/terms" class="underline hover:text-zinc-300">Terms</a> and
-        <a href="/privacy" class="underline hover:text-zinc-300">Privacy Policy</a>.
+        Al iniciar sesión aceptas nuestros
+        <a href="/terms" class="underline hover:text-zinc-300">Términos de Servicio</a> y la
+        <a href="/privacy" class="underline hover:text-zinc-300">Política de Privacidad</a>.
       </p>
     </form>
 

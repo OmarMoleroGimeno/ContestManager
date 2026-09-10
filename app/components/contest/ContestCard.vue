@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Card, CardContent, CardFooter } from '@/components/ui/card'
+import { ref, computed } from 'vue'
+import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { CalendarClock, Users, Trash, AlertTriangle } from 'lucide-vue-next'
-
-const DEFAULT_COVER = 'https://thaftosvbwcoudzfwiou.supabase.co/storage/v1/object/public/contest-assets/default-cover.png'
+import { CalendarClock, Tag, Trash, AlertTriangle } from 'lucide-vue-next'
+import { getStatusBannerClasses } from '@/utils/styles'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,8 +17,19 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 
-const props = defineProps({
-  contest: { type: Object, required: true }
+const DEFAULT_COVER = 'https://thaftosvbwcoudzfwiou.supabase.co/storage/v1/object/public/contest-assets/default-cover.png'
+
+const props = withDefaults(defineProps<{
+  contest: Record<string, any>
+  /** Link target — differs between the organizer and participant views. */
+  to: string
+  /** Show the delete action (organizer view only). */
+  deletable?: boolean
+  /** Overrides merged over the default status labels. */
+  statusLabels?: Record<string, string>
+}>(), {
+  deletable: false,
+  statusLabels: undefined,
 })
 
 const emit = defineEmits<{
@@ -28,107 +38,113 @@ const emit = defineEmits<{
 
 const isDeleteDialogOpen = ref(false)
 
-const statusLabel = (status: string) => {
-  const map: Record<string, string> = {
-    draft: 'Borrador',
-    active: 'Activo',
-    finished: 'Finalizado',
-    cancelled: 'Cancelado',
-  }
-  return map[status] ?? status
+const DEFAULT_STATUS_LABELS: Record<string, string> = {
+  draft: 'Borrador',
+  active: 'Activo',
+  finished: 'Finalizado',
+  cancelled: 'Cancelado',
 }
 
-const getStatusColor = (status: string) => {
-  switch(status) {
-    case 'active': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300'
-    case 'draft': return 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300'
-    case 'finished': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-    case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-    default: return 'bg-zinc-100 text-zinc-800'
-  }
-}
+const statusLabel = computed(() => {
+  const labels = { ...DEFAULT_STATUS_LABELS, ...(props.statusLabels ?? {}) }
+  return labels[props.contest.status] ?? props.contest.status
+})
+
+const startsAtLabel = computed(() => {
+  const raw = props.contest.starts_at
+  if (!raw) return '—'
+  return new Date(raw).toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+})
 </script>
 
 <template>
   <Card
-    class="group relative overflow-hidden border-border dark:shadow-none hover:shadow-lg transition-all duration-300 hover:border-zinc-700 bg-card flex flex-col min-h-[28rem]"
+    class="group relative flex min-h-[11rem] flex-col justify-end overflow-hidden border-border bg-muted transition-all duration-200 hover:border-zinc-400 hover:shadow-md dark:hover:border-zinc-600 dark:shadow-none"
   >
-    <!-- Background image (default fallback) -->
+    <!-- Cover fills the whole card -->
     <div
-      class="absolute inset-0 bg-muted bg-center bg-cover transition-transform duration-500 group-hover:scale-105"
+      class="absolute inset-0 bg-cover bg-center transition-transform duration-500 group-hover:scale-105"
       :style="`background-image: url('${contest.cover_image_url || DEFAULT_COVER}')`"
-    ></div>
+    />
+    <!-- Bottom-weighted so the text block stays readable over any artwork -->
+    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/20 pointer-events-none" />
 
-    <!-- Dark gradient overlay -->
-    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-black/10 pointer-events-none"></div>
+    <Badge
+      :class="getStatusBannerClasses(contest.status)"
+      class="absolute left-2 top-2 border text-[10px] font-semibold shadow-sm backdrop-blur-sm"
+    >
+      {{ statusLabel }}
+    </Badge>
 
-    <!-- Top-right delete -->
-    <div class="relative z-10 flex justify-end p-3">
-      <AlertDialog v-model:open="isDeleteDialogOpen">
-        <AlertDialogTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-8 w-8 text-white/70 hover:text-white bg-black/40 hover:bg-red-600/80 backdrop-blur-sm transition-colors"
-          >
-            <Trash class="w-4 h-4" />
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent class="border-border">
-          <AlertDialogHeader>
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-destructive/10 rounded-full h-fit">
-                <AlertTriangle class="w-5 h-5 text-destructive" />
-              </div>
-              <AlertDialogTitle>¿Estás completamente seguro?</AlertDialogTitle>
-            </div>
-            <AlertDialogDescription class="pt-2 text-zinc-600 dark:text-zinc-400">
-              Esta acción es irreversible. Al eliminar el concurso <strong class="text-zinc-900 dark:text-zinc-100">"{{ contest.name }}"</strong> se borrarán todos los datos asociados de forma permanente.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel class="h-9">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              @click="emit('delete', contest.id)"
-              class="h-9 bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-600/20"
-            >
-              Eliminar permanentemente
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-
-    <!-- Spacer to push text content down -->
-    <div class="relative z-10 flex-1"></div>
-
-    <!-- Text content over gradient -->
-    <div class="relative z-10 px-6 pt-4 pb-3 space-y-2 text-white">
-      <Badge :class="getStatusColor(contest.status)" class="capitalize border-none shadow-none font-medium text-xs">
-        {{ statusLabel(contest.status) }}
-      </Badge>
-      <h3 class="text-xl font-bold leading-tight drop-shadow-md">{{ contest.name }}</h3>
-    </div>
-
-    <CardContent class="relative z-10 py-3">
-      <div class="flex items-center justify-between text-sm text-white/70">
-        <div class="flex items-center gap-1.5">
-          <CalendarClock class="w-4 h-4" />
-          <span>{{ contest.starts_at ? new Date(contest.starts_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' }}</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <Users class="w-4 h-4" />
-          <span class="capitalize">{{ contest.type }}</span>
-        </div>
-      </div>
-    </CardContent>
-
-    <CardFooter class="relative z-10 pt-0 pb-4 px-6 flex gap-3">
-      <NuxtLink :to="`/contests/${contest.slug}`" class="w-full">
-        <Button class="w-full bg-white text-zinc-900 hover:bg-zinc-100 transition-all shadow-sm font-bold">
-          Administrar
+    <!-- Sits above the stretched link so it doesn't navigate -->
+    <AlertDialog v-if="deletable" v-model:open="isDeleteDialogOpen">
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Eliminar concurso"
+          class="absolute right-2 top-2 z-20 h-7 w-7 bg-black/40 text-white/80 opacity-0 backdrop-blur-sm transition hover:bg-red-600/80 hover:text-white focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <Trash class="h-3.5 w-3.5" />
         </Button>
-      </NuxtLink>
-    </CardFooter>
+      </AlertDialogTrigger>
+      <AlertDialogContent class="border-border">
+        <AlertDialogHeader>
+          <div class="flex items-center gap-3">
+            <div class="h-fit rounded-full bg-destructive/10 p-2">
+              <AlertTriangle class="h-5 w-5 text-destructive" />
+            </div>
+            <AlertDialogTitle>¿Estás completamente seguro?</AlertDialogTitle>
+          </div>
+          <AlertDialogDescription class="pt-2 text-zinc-600 dark:text-zinc-400">
+            Esta acción es irreversible. Al eliminar el concurso <strong class="text-zinc-900 dark:text-zinc-100">"{{ contest.name }}"</strong> se borrarán todos los datos asociados de forma permanente.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel class="h-9">Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            @click="emit('delete', contest.id)"
+            class="h-9 bg-red-600 text-white shadow-md shadow-red-600/20 hover:bg-red-700"
+          >
+            Eliminar permanentemente
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <!-- Content, anchored to the bottom over the gradient -->
+    <div class="relative flex flex-col gap-1.5 p-4 text-white">
+      <div class="empty:hidden flex flex-wrap gap-1.5">
+        <slot name="badges" />
+      </div>
+
+      <h3 class="line-clamp-2 text-sm font-semibold leading-snug drop-shadow-md">
+        {{ contest.name }}
+      </h3>
+
+      <!-- Wraps instead of overflowing once the grid gets dense (2xl = 6 columns) -->
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/70">
+        <span class="flex items-center gap-1 whitespace-nowrap">
+          <CalendarClock class="h-3.5 w-3.5 shrink-0" />
+          {{ startsAtLabel }}
+        </span>
+        <span class="flex min-w-0 items-center gap-1">
+          <Tag class="h-3.5 w-3.5 shrink-0" />
+          <span class="truncate capitalize">{{ contest.type }}</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Stretched link: makes the whole card clickable without nesting the
+         delete button inside an anchor. -->
+    <NuxtLink
+      :to="to"
+      :aria-label="contest.name"
+      class="absolute inset-0 z-10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    />
   </Card>
 </template>

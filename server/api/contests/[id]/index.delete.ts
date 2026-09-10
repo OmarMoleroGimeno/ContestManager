@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   // Resolve to id scoped to user's org (slug is unique per org)
   let q = client.from('contests').select('id').limit(1)
   if (isUUID) {
-    q = q.eq('id', idOrSlug)
+    q = q.eq('id', idOrSlug).eq('organization_id', org.id)
   } else {
     q = q.eq('slug', idOrSlug).eq('organization_id', org.id)
   }
