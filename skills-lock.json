@@ -11,6 +11,12 @@
       "sourceType": "autoskills-registry",
       "computedHash": "82fb11a63fb1e35ee2469516ed02d54695f783115b1540c0e783197af4240a3a"
     },
+    "herdr": {
+      "source": "herdrdev/herdr",
+      "sourceType": "github",
+      "skillPath": "skills/herdr/SKILL.md",
+      "computedHash": "d2ee5846631446f22067c52980d100c9355df48106a679a04aab1c7a383b5f41"
+    },
     "nodejs-backend-patterns": {
       "source": "wshobson/agents",
       "sourceType": "autoskills-registry",
@@ -25,6 +31,12 @@
       "source": "antfu/skills",
       "sourceType": "autoskills-registry",
       "computedHash": "8a52f7cd26bc9bbc477a086b9c33a901fd6c68df8cd7d49417270e44c1ad88c6"
+    },
+    "owasp-security": {
+      "source": "agamm/claude-code-owasp",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/owasp-security/SKILL.md",
+      "computedHash": "3441937e14d1be92267310c4b6b17db2ecc04a6d7f60ded24abc122bfb4ae04c"
     },
     "seo": {
       "source": "addyosmani/web-quality-skills",

@@ -30,6 +30,7 @@ its rules. Don't summarize — actually use the patterns documented there.
 | New page/component design, visual polish, layout            | `.agents/skills/frontend-design/SKILL.md` |
 | WCAG, keyboard nav, ARIA, screen-reader audits              | `.agents/skills/accessibility/SKILL.md` |
 | `<head>`, meta, OG, sitemap, structured data                | `.agents/skills/seo/SKILL.md` |
+| Seguridad de app: authz, validación, secretos, cabeceras, PII | `.agents/skills/owasp-security/SKILL.md` |
 
 ### Loading rule
 
