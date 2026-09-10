@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 import { BulkRoundParticipantsSchema } from '~~/server/utils/schemas'
 
 export default defineEventHandler(async (event) => {
@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     .select('contest_id')
     .eq('id', round.category_id)
     .maybeSingle()
-  if (!cat?.contest_id) throw createError({ statusCode: 500, statusMessage: 'Could not resolve contest' })
+  if (!cat?.contest_id) throw internalError(event, 'round has no resolvable contest', 'rounds.select:contest_resolution')
   await requireOrgOwnerOrMember(event, cat.contest_id)
 
   const rawBody = await readBody(event)
@@ -31,11 +31,12 @@ export default defineEventHandler(async (event) => {
   }
   const { participantIds } = parsed.data
 
+  // NULL, not false: being added to a round is not a qualification verdict.
   const roundParticipants = participantIds.map((pid: string, idx: number) => ({
     round_id: roundId,
     participant_id: pid,
     order: idx + 1,
-    is_qualified: false 
+    is_qualified: null
   }))
 
   const { error } = await client

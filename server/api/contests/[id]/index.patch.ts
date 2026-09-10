@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 import { sendContestStartedEmail } from '~~/server/utils/email'
 import { rejectPendingJudgeInvitations } from '~~/server/services/contest-activation'
 import { ContestPatchSchema } from '~~/server/utils/schemas'
@@ -34,6 +34,21 @@ export default defineEventHandler(async (event) => {
     if (!data) throw createError({ statusCode: 404, statusMessage: 'contest_not_found' })
     contestRow = data as any
     return contestRow
+  }
+
+  // A finished or cancelled contest is closed for good: no status change and no
+  // edits of any other field. Reaching those states is still allowed — this only
+  // locks the contest once it is already there.
+  {
+    const cur = await loadContest()
+    if (cur!.status === 'finished' || cur!.status === 'cancelled') {
+      throw createError({
+        statusCode: 409,
+        statusMessage: cur!.status === 'finished'
+          ? 'El concurso está finalizado y no se puede modificar.'
+          : 'El concurso está cancelado y no se puede modificar.',
+      })
+    }
   }
 
   // Gate: setting entry_fee_cents > 0 requires org.stripe_charges_enabled
@@ -83,7 +98,7 @@ export default defineEventHandler(async (event) => {
             statusMessage: 'Sin activaciones disponibles. Compra un paquete en /billing.',
           })
         }
-        throw createError({ statusCode: 500, statusMessage: actErr.message })
+        throw internalError(event, actErr, 'rpc:consume_activation')
       }
 
       // Reject all pending judge invitations when contest starts

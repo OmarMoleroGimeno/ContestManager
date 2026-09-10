@@ -1,5 +1,5 @@
-import { defineEventHandler, createError } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { defineEventHandler } from 'h3'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const { org } = await requireOrgOwner(event)
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     .select('id, status, created_at')
     .in('organization_id', orgIds)
 
-  if (contestsError) throw createError({ statusCode: 500, statusMessage: contestsError.message })
+  if (contestsError) throw internalError(event, contestsError, 'contests.select')
 
   // Datos para DonutChart - Distribución por estado
   const statusColors: Record<string, string> = {
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
       .select('id, status, payment_status, created_at, amount_paid_cents, contest_id')
       .in('contest_id', contestIds)
 
-    if (partsError) throw createError({ statusCode: 500, statusMessage: partsError.message })
+    if (partsError) throw internalError(event, partsError, 'participants.select')
     participants = partsData || []
   }
 
@@ -111,7 +111,7 @@ export default defineEventHandler(async (event) => {
     .in('organization_id', orgIds)
     .eq('reason', 'purchase_bundle')
 
-  if (transactionsError) throw createError({ statusCode: 500, statusMessage: transactionsError.message })
+  if (transactionsError) throw internalError(event, transactionsError, 'billing_transactions.select')
 
   const totalRevenue = transactions?.reduce((sum: number, t: any) => sum + (t.amount_cents || 0), 0) || 0
 

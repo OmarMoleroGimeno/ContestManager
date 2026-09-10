@@ -2,7 +2,8 @@
 // Save/create form schema for a contest (organizers only)
 
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
+import { FormSchemaBodySchema } from '~~/server/utils/schemas'
 import type { FormField } from '~/types/inscription-form'
 
 interface FormSchemaBody {
@@ -17,10 +18,12 @@ export default defineEventHandler(async (event) => {
   // Auth gate — require org owner or contest member
   await requireOrgOwnerOrMember(event, contestId)
 
-  const body = await readBody<FormSchemaBody>(event)
-  if (!body.fields || !Array.isArray(body.fields)) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid fields' })
+  const rawBody = await readBody(event)
+  const parsedBody = FormSchemaBodySchema.safeParse(rawBody)
+  if (!parsedBody.success) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid fields', data: parsedBody.error.issues })
   }
+  const body = { ...(rawBody as FormSchemaBody), fields: parsedBody.data.fields as FormField[] }
 
   const client = serverSupabaseAdmin()
 
@@ -48,7 +51,7 @@ export default defineEventHandler(async (event) => {
     .single()
 
   if (error) {
-    throw createError({ statusCode: 500, statusMessage: error.message })
+    throw internalError(event, error, 'inscription_form_schemas.insert')
   }
 
   return data

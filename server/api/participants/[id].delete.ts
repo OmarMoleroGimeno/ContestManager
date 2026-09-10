@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseClient, serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseClient, serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const admin  = serverSupabaseAdmin()
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     .eq('category_id', participant.category_id)
     .neq('status', 'pending')
 
-  if (roundsError) throw createError({ statusCode: 500, statusMessage: roundsError.message })
+  if (roundsError) throw internalError(event, roundsError, 'rounds.select')
 
   if (rounds && rounds.length > 0) {
     throw createError({
@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
     .delete()
     .eq('id', id)
 
-  if (deleteError) throw createError({ statusCode: 500, statusMessage: deleteError.message })
+  if (deleteError) throw internalError(event, deleteError, 'participants.delete')
 
   return { success: true, refunded }
 })

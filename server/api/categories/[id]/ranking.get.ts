@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 type RoundAvg = { round_id: string; round_order: number; round_name: string; avg: number | null }
 
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     .eq('category_id', categoryId)
     .order('order', { ascending: true })
 
-  if (roundsError) throw createError({ statusCode: 500, statusMessage: roundsError.message })
+  if (roundsError) throw internalError(event, roundsError, 'rounds.select')
   const rounds = roundsData || []
 
   // Participants in category
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     .select('id, name, first_name, last_name')
     .eq('category_id', categoryId)
 
-  if (pErr) throw createError({ statusCode: 500, statusMessage: pErr.message })
+  if (pErr) throw internalError(event, pErr, 'participants.select')
   const participants = participantsData || []
 
   if (!rounds.length || !participants.length) {
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     .in('round_id', roundIds)
     .in('participant_id', partIds)
 
-  if (sErr) throw createError({ statusCode: 500, statusMessage: sErr.message })
+  if (sErr) throw internalError(event, sErr, 'scores.select')
 
   // Overrides on round_participants
   const { data: rpData, error: rpErr } = await client
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
     .in('round_id', roundIds)
     .in('participant_id', partIds)
 
-  if (rpErr) throw createError({ statusCode: 500, statusMessage: rpErr.message })
+  if (rpErr) throw internalError(event, rpErr, 'round_participants.select')
 
   const overrideMap = new Map<string, number>()
   for (const rp of rpData || []) {

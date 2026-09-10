@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { H3Event } from 'h3'
+import type { H3Error, H3Event } from 'h3'
 import { getHeader, createError } from 'h3'
 
 let _adminClient: ReturnType<typeof createClient> | null = null
@@ -34,6 +34,84 @@ export const serverSupabaseUser = (event: H3Event) => {
     global: { headers: token ? { Authorization: `Bearer ${token}` } : {} },
     auth: { persistSession: false, autoRefreshToken: false }
   })
+}
+
+// ─── Internal error responses ────────────────────────────────────────────────
+
+/**
+ * Closed set of generic `statusMessage` values allowed on a 500 response.
+ *
+ * RULE: a Supabase/PostgREST/Postgres error is NEVER propagated to the client.
+ * Its `message`, `details`, `hint` and `code` expose table names, column names
+ * and constraint names, which lets an attacker reconstruct the schema without
+ * database access (OWASP Top 10:2025 A10, ASVS 5.0 16.5.1). The real message is
+ * logged server-side with route, method and operation; the client only gets one
+ * of the codes below.
+ *
+ * Semantic 4xx business errors (`forbidden`, `org_owner_required`,
+ * `registration_closed`, Zod validation, …) are a separate contract with the
+ * frontend and are unaffected by this rule.
+ */
+export const INTERNAL_ERROR_CODES = [
+  'internal_error',
+  'org_delete_failed',
+  'auth_delete_failed',
+  'stripe_error',
+  'audit_log_failed',
+  'cancel_partial',
+] as const
+
+export type InternalErrorCode = (typeof INTERNAL_ERROR_CODES)[number]
+
+/** Shape of a PostgrestError — a plain object, not an `Error` instance. */
+interface PostgrestLikeError {
+  message?: unknown
+  code?: unknown
+  details?: unknown
+  hint?: unknown
+}
+
+/** Build a debuggable one-line description of any thrown/returned error. */
+function describeCause(cause: unknown): string {
+  if (cause == null) return 'unknown'
+  if (typeof cause === 'string') return cause
+  if (cause instanceof Error) return cause.message
+
+  if (typeof cause === 'object') {
+    const err = cause as PostgrestLikeError
+    const parts: string[] = []
+    if (typeof err.code === 'string' && err.code) parts.push(`code=${err.code}`)
+    if (typeof err.message === 'string' && err.message) parts.push(err.message)
+    if (typeof err.details === 'string' && err.details) parts.push(`details=${err.details}`)
+    if (typeof err.hint === 'string' && err.hint) parts.push(`hint=${err.hint}`)
+    if (parts.length) return parts.join(' | ')
+  }
+
+  return String(cause)
+}
+
+/**
+ * Log an internal failure with enough context to debug it (method, route,
+ * operation) and return a sanitized 500 error for the client.
+ *
+ * Usage: `if (error) throw internalError(event, error, 'organizations.select')`
+ *
+ * @param event     current request, used for method + route context
+ * @param cause     the raw Supabase/Stripe/unknown error — logged, never sent
+ * @param operation short, stable label of what failed, e.g. `rounds.update`
+ * @param code      generic client-facing code, defaults to `internal_error`
+ */
+export function internalError(
+  event: H3Event | null,
+  cause: unknown,
+  operation: string,
+  code: InternalErrorCode = 'internal_error',
+): H3Error {
+  const method = event?.method || event?.node?.req?.method || ''
+  const path = event?.path || event?.node?.req?.url || ''
+  // eslint-disable-next-line no-console
+  console.error(`[api error] ${method} ${path} :: ${operation} ::`, describeCause(cause))
+  return createError({ statusCode: 500, statusMessage: code })
 }
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
@@ -95,7 +173,7 @@ export async function requireOrgOwner(event: H3Event): Promise<OrgOwnerResult> {
     .maybeSingle()
 
   if (error) {
-    throw createError({ statusCode: 500, statusMessage: error.message })
+    throw internalError(event, error, 'organizations.select')
   }
   if (!org) {
     throw createError({ statusCode: 403, statusMessage: 'org_owner_required' })
@@ -116,15 +194,26 @@ export async function requireOrgOwnerOrMember(
   const user = requireAuth(event)
   const admin = serverSupabaseAdmin()
 
-  // Check if org owner
-  const { data: org } = await admin
-    .from('organizations')
-    .select('id')
-    .eq('owner_id', user.id)
+  // Check if owner of the organization that owns THIS contest.
+  // Must be scoped to the contest — checking "owns any org" would let any
+  // organizer act on every other tenant's contests.
+  const { data: contest } = await admin
+    .from('contests')
+    .select('organization_id')
+    .eq('id', contestId)
     .maybeSingle()
 
-  if (org) {
-    return { user, org, member: null }
+  if (contest) {
+    const { data: org } = await admin
+      .from('organizations')
+      .select('id')
+      .eq('id', (contest as any).organization_id)
+      .eq('owner_id', user.id)
+      .maybeSingle()
+
+    if (org) {
+      return { user, org, member: null }
+    }
   }
 
   // Check if accepted contest member (by user_id or email).

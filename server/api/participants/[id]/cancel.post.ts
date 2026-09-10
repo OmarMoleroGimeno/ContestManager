@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 
 export default defineEventHandler(async (event) => {
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     .select('id, user_id, category_id, contest_id, stripe_payment_intent_id, amount_paid_cents, amount_refunded_cents, payment_status')
     .eq('id', id)
     .maybeSingle()
-  if (pErr) throw createError({ statusCode: 500, statusMessage: pErr.message })
+  if (pErr) throw internalError(event, pErr, 'participants.select')
   if (!p) throw createError({ statusCode: 404, statusMessage: 'participant_not_found' })
 
   // Ownership check: participant must belong to the requesting user
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     .select('status')
     .eq('category_id', p.category_id)
     .neq('status', 'pending')
-  if (rErr) throw createError({ statusCode: 500, statusMessage: rErr.message })
+  if (rErr) throw internalError(event, rErr, 'rounds.select')
   if (rounds && rounds.length > 0) {
     throw createError({
       statusCode: 409,
@@ -63,8 +63,7 @@ export default defineEventHandler(async (event) => {
   // Delete participant (trigger notifies org owner)
   const { error: dErr } = await admin.from('participants').delete().eq('id', id)
   if (dErr) {
-    console.error('[cancel] delete failed after refund:', dErr.message, 'participant:', id)
-    throw createError({ statusCode: 500, statusMessage: 'cancel_partial: participant could not be deleted after refund' })
+    throw internalError(event, dErr, `participants.delete:after_refund:${id}`, 'cancel_partial')
   }
 
   return { cancelled: true, refund: refundInfo }

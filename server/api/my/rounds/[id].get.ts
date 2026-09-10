@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const user = requireAuth(event)
@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
   ])
 
   const myParticipant = participantRes.data
-  if (participantRes.error) throw createError({ statusCode: 500, statusMessage: participantRes.error.message })
+  if (participantRes.error) throw internalError(event, participantRes.error, 'participants.select')
   const allSlots = allSlotsRes.data ?? []
   const criteria = criteriaRes.data ?? []
 

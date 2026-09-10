@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 import { JudgePoolSchema } from '~~/server/utils/schemas'
 
 export default defineEventHandler(async (event) => {
@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
       .select('id')
       .single()
 
-    if (createErrorMsg) throw createError({ statusCode: 500, statusMessage: createErrorMsg.message })
+    if (createErrorMsg) throw internalError(event, createErrorMsg, 'judges.insert')
     judge = newJudge
   }
 
@@ -58,10 +58,7 @@ export default defineEventHandler(async (event) => {
     .single()
 
   if (memberError && memberError.code !== '23505') { // 23505 is unique violation
-    throw createError({
-      statusCode: 500,
-      statusMessage: memberError.message
-    })
+    throw internalError(event, memberError, 'judge_pool_members.insert')
   }
 
   // Retornamos el perfil completo para el frontend

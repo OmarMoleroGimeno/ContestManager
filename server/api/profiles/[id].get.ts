@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 
 // GET /api/profiles/:id
 // Returns a user profile + their participations.
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
     .select('id, full_name, avatar_url, account_type, created_at')
     .eq('id', targetId)
     .maybeSingle()
-  if (profErr) throw createError({ statusCode: 500, statusMessage: profErr.message })
+  if (profErr) throw internalError(event, profErr, 'profiles.select')
   if (!profile) throw createError({ statusCode: 404, statusMessage: 'profile_not_found' })
 
   // Fetch auth user for email

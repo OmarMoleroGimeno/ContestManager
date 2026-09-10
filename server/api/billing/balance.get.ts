@@ -1,5 +1,5 @@
-import { defineEventHandler, createError } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwner } from '~~/server/utils/supabase'
+import { defineEventHandler } from 'h3'
+import { serverSupabaseAdmin, requireOrgOwner, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const { org } = await requireOrgOwner(event)
@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     .eq('organization_id', org.id)
     .order('created_at', { ascending: false })
     .limit(100)
-  if (txErr) throw createError({ statusCode: 500, statusMessage: txErr.message })
+  if (txErr) throw internalError(event, txErr, 'billing_transactions.select')
 
   return {
     organization: {

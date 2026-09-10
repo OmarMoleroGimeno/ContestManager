@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 
 export default defineEventHandler(async (event) => {
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     .select('id, user_id, stripe_payment_intent_id, payment_status, amount_paid_cents, amount_refunded_cents, created_at')
     .eq('id', id)
     .maybeSingle()
-  if (pErr) throw createError({ statusCode: 500, statusMessage: pErr.message })
+  if (pErr) throw internalError(event, pErr, 'participants.select')
   if (!p) throw createError({ statusCode: 404, statusMessage: 'participant_not_found' })
   if (p.user_id !== user.id) throw createError({ statusCode: 403, statusMessage: 'forbidden' })
   if (!p.stripe_payment_intent_id) {
@@ -39,6 +39,6 @@ export default defineEventHandler(async (event) => {
       paid_at: p.created_at,
     }
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: `stripe_error: ${err?.message || 'unknown'}` })
+    throw internalError(event, err, 'stripe.paymentIntents.retrieve', 'stripe_error')
   }
 })

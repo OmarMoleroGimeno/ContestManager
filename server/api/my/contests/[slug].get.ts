@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const user = requireAuth(event)
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     .from('contests')
     .select('id, name, slug, description, rules, type, status, starts_at, ends_at, settings, is_rounds_dynamic, cover_image_url, created_at')
     .eq('slug', slug)
-  if (slugErr) throw createError({ statusCode: 500, statusMessage: slugErr.message })
+  if (slugErr) throw internalError(event, slugErr, 'contests.select')
   if (!slugMatches || slugMatches.length === 0) {
     throw createError({ statusCode: 404, statusMessage: 'Contest not found' })
   }

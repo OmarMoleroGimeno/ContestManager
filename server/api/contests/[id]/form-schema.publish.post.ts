@@ -2,7 +2,7 @@
 // Publish a form schema (organizers only)
 
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const contestId = getRouterParam(event, 'id')
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     .eq('id', latestSchema.id)
 
   if (error) {
-    throw createError({ statusCode: 500, statusMessage: error.message })
+    throw internalError(event, error, 'inscription_form_schemas.update')
   }
 
   return { success: true, schemaId: latestSchema.id }

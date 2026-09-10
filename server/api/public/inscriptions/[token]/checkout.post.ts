@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getRouterParam, readBody } from 'h3'
-import { serverSupabaseAdmin, requireAuth } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireAuth, internalError } from '~~/server/utils/supabase'
 import { getStripe } from '~~/server/utils/stripe'
 import { CheckoutEnrollmentSchema } from '~~/server/utils/schemas'
 
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     .select('id, name, slug, status, registration_open, entry_fee_cents, organization_id')
     .eq('registration_token', token)
     .maybeSingle()
-  if (cErr) throw createError({ statusCode: 500, statusMessage: cErr.message })
+  if (cErr) throw internalError(event, cErr, 'contests.select')
   if (!contest) throw createError({ statusCode: 404, statusMessage: 'contest_not_found' })
   if (['active','finished','cancelled'].includes((contest as any).status)) {
     throw createError({ statusCode: 409, statusMessage: 'El concurso ya está en curso. Inscripciones cerradas.' })
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
     .select('id, name, stripe_account_id, stripe_charges_enabled')
     .eq('id', contest.organization_id)
     .single()
-  if (oErr) throw createError({ statusCode: 500, statusMessage: oErr.message })
+  if (oErr) throw internalError(event, oErr, 'organizations.select')
   if (!org.stripe_account_id || !org.stripe_charges_enabled) {
     throw createError({ statusCode: 400, statusMessage: 'org_not_connected' })
   }

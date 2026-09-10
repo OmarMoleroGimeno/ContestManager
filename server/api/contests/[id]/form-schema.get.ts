@@ -2,7 +2,7 @@
 // Get form schema for a contest (organizers only)
 
 import { defineEventHandler, createError, getRouterParam } from 'h3'
-import { serverSupabaseAdmin, requireOrgOwnerOrMember } from '~~/server/utils/supabase'
+import { serverSupabaseAdmin, requireOrgOwnerOrMember, internalError } from '~~/server/utils/supabase'
 
 export default defineEventHandler(async (event) => {
   const contestId = getRouterParam(event, 'id')
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     .single()
 
   if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-    throw createError({ statusCode: 500, statusMessage: error.message })
+    throw internalError(event, error, 'inscription_form_schemas.select')
   }
 
   return data || null
